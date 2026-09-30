@@ -26,6 +26,10 @@ export function PageCanvas({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const taskRef = useRef<PdfRenderTask | null>(null);
+  // What is currently painted. A container whose width depends on the canvas's
+  // height (any scrolling column) can oscillate by a scrollbar's width, and
+  // restarting the render on each wobble means it never finishes — a blank page.
+  const paintedRef = useRef<string | null>(null);
   const [cssHeight, setCssHeight] = useState(0);
 
   useEffect(() => {
@@ -34,6 +38,10 @@ export function PageCanvas({
     async function render() {
       const canvas = canvasRef.current;
       if (!canvas || cssWidth <= 0) return;
+
+      // Sub-pixel and scrollbar-sized changes are not worth a repaint.
+      const key = `${pageNumber}@${Math.round(cssWidth)}`;
+      if (paintedRef.current === key) return;
 
       taskRef.current?.cancel();
 
@@ -63,6 +71,7 @@ export function PageCanvas({
 
       try {
         await task.promise;
+        if (!cancelled) paintedRef.current = key;
       } catch {
         // A cancelled task is the normal outcome of zooming or paging.
       }
@@ -71,6 +80,7 @@ export function PageCanvas({
     void render();
 
     return () => {
+      paintedRef.current = null;
       cancelled = true;
       taskRef.current?.cancel();
     };

@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 /** Outside the (app) group: field placement wants the full viewport. */
 export default async function SendPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireOwner();
+  const owner = await requireOwner();
   const { id } = await params;
 
   const contract = await getContract(id);
@@ -44,6 +44,8 @@ export default async function SendPage({ params }: { params: Promise<{ id: strin
       contractTitle={contract.title}
       versionId={contract.latest.id}
       pageCount={contract.latest.page_count ?? 1}
+      ownerName={owner.fullName ?? owner.email}
+      ownerEmail={owner.email}
     />
   );
 }

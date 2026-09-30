@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { FileText, PenLine } from "lucide-react";
+import { Clock, FileText, PenLine, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { STATUS_CLASSES, STATUS_LABELS, formatBytes } from "@/lib/contracts/types";
 import type { ContractWithLatest } from "@/lib/contracts/queries";
 import { DeleteContractButton } from "@/components/contracts/delete-contract-button";
 
 export function ContractCard({ contract }: { contract: ContractWithLatest }) {
-  const { latest } = contract;
+  const { latest, signing } = contract;
 
   return (
     <div className="group relative rounded-lg border border-border bg-surface transition-colors hover:border-border-strong">
@@ -46,6 +46,22 @@ export function ContractCard({ contract }: { contract: ContractWithLatest }) {
             <Badge className={STATUS_CLASSES[contract.status]}>
               {STATUS_LABELS[contract.status]}
             </Badge>
+
+            {/* Waiting on someone is the thing worth spotting from across the
+                dashboard, so it gets its own badge rather than being buried in
+                the status word. */}
+            {signing && signing.declined > 0 ? (
+              <Badge className="gap-1 border-destructive/40 bg-destructive-subtle text-destructive">
+                <X className="size-3" aria-hidden />
+                Declined
+              </Badge>
+            ) : signing && signing.signed < signing.total ? (
+              <Badge className="gap-1 border-warning/40 bg-warning/10 text-foreground">
+                <Clock className="size-3" aria-hidden />
+                {signing.signed} of {signing.total} signed
+              </Badge>
+            ) : null}
+
             <span className="text-xs text-muted-foreground">
               {latest
                 ? `${latest.page_count ?? "?"} page${latest.page_count === 1 ? "" : "s"} · ${formatBytes(latest.byte_size)}`

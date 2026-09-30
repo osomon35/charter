@@ -12,6 +12,7 @@ import {
   submitSignature,
 } from "@/lib/envelopes/signer-actions";
 import { FIELD_LABELS, type SignerField } from "@/lib/envelopes/types";
+import { todayLabel } from "@/lib/editor/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -60,7 +61,13 @@ export function SignerExperience({
 }) {
   const [phase, setPhase] = useState<Phase>(alreadyConsented ? "filling" : "consent");
   const [agreed, setAgreed] = useState(alreadyConsented);
-  const [values, setValues] = useState<Record<string, Filled>>({});
+  const [values, setValues] = useState<Record<string, Filled>>(() => {
+    const initial: Record<string, Filled> = {};
+    for (const field of fields) {
+      if (field.type === "date_signed") initial[field.id] = { text: todayLabel() };
+    }
+    return initial;
+  });
   const [capturing, setCapturing] = useState<SignerField | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -142,7 +149,7 @@ export function SignerExperience({
     setActiveId(nextField.id);
     const node = fieldRefs.current[nextField.id];
     node?.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (nextField.type === "text" || nextField.type === "date_signed") {
+    if (nextField.type === "text") {
       setTimeout(() => node?.querySelector("input")?.focus(), 400);
     }
   }
@@ -529,14 +536,22 @@ function SignerPage({
               />
             ) : null}
 
-            {field.type === "text" || field.type === "date_signed" ? (
+            {field.type === "date_signed" ? (
+              /* Filled automatically and not editable: the date signed is
+                 evidence, and one the signer could retype would not be. */
+              <span className="w-full truncate px-1 text-[11px] font-medium text-[#111827]">
+                {value.text ?? todayLabel()}
+              </span>
+            ) : null}
+
+            {field.type === "text" ? (
               <Input
                 disabled={!interactive}
                 value={value.text ?? ""}
                 onChange={(event) => onText(field, event.target.value)}
                 onFocus={() => onActivate(field)}
                 placeholder={field.label ?? FIELD_LABELS[field.type]}
-                className="h-full w-full rounded-[3px] border-0 bg-transparent px-1 text-[11px] shadow-none"
+                className="h-full w-full rounded-[3px] border-0 bg-transparent px-1 text-[11px] text-[#111827] placeholder:text-[#9ca3af] shadow-none"
               />
             ) : null}
           </div>

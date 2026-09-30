@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Send, Trash2, X } from "lucide-react";
+import { ArrowLeft, Plus, Send, Trash2, X } from "lucide-react";
 import { loadPdfjs, type PdfDocument } from "@/lib/pdfjs";
 import { PageCanvas } from "@/components/editor/page-canvas";
 import { createAndSendEnvelope, getSendPreviewUrl } from "@/lib/envelopes/send-actions";
@@ -45,11 +45,15 @@ export function SendFlow({
   contractTitle,
   versionId,
   pageCount,
+  ownerName,
+  ownerEmail,
 }: {
   contractId: string;
   contractTitle: string;
   versionId: string;
   pageCount: number;
+  ownerName: string;
+  ownerEmail: string;
 }) {
   const router = useRouter();
 
@@ -64,7 +68,7 @@ export function SendFlow({
 
   const [activeRecipient, setActiveRecipient] = useState(0);
   const [tool, setTool] = useState<FieldType>("signature");
-  const [page, setPage] = useState(1);
+  const [selfSigning, setSelfSigning] = useState(false);
 
   const [doc, setDoc] = useState<PdfDocument | null>(null);
   const [width, setWidth] = useState(0);
@@ -78,6 +82,11 @@ export function SendFlow({
   // A ref, not the busy state: setBusy does not take effect until the next
   // render, so a fast second click would otherwise slip past a disabled button.
   const sending = useRef(false);
+  // When the last real drag ended. A drag that finishes over the page also fires
+  // a click, which would otherwise place a duplicate where the field was
+  // dropped. A timestamp rather than a flag, because a drag ending off-page
+  // produces no click and a flag would stay set and eat the next real one.
+  const dragEndedAt = useRef(0);
 
   // --- document ------------------------------------------------------------
   useEffect(() => {
@@ -132,6 +141,47 @@ export function SendFlow({
     );
   }
 
+  function toggleSelfSigning(on: boolean) {
+    setSelfSigning(on);
+
+    if (on) {
+      setRecipients((current) =>
+        current.some(
+          (recipient) => recipient.email.trim().toLowerCase() === ownerEmail.toLowerCase(),
+        )
+          ? current
+          : [
+              ...current,
+              {
+                id: crypto.randomUUID(),
+                name: ownerName,
+                email: ownerEmail,
+                role: "Me",
+              },
+            ],
+      );
+      return;
+    }
+
+    const mineIds = new Set(
+      recipients
+        .filter(
+          (recipient) => recipient.email.trim().toLowerCase() === ownerEmail.toLowerCase(),
+        )
+        .map((recipient) => recipient.id),
+    );
+
+    setFields((current) => current.filter((field) => !mineIds.has(field.recipientId)));
+    setRecipients((current) => {
+      const rest = current.filter((recipient) => !mineIds.has(recipient.id));
+      // Never leave the list empty, or there is nothing to type into.
+      return rest.length > 0
+        ? rest
+        : [{ id: crypto.randomUUID(), name: "", email: "", role: "" }];
+    });
+    setActiveRecipient(0);
+  }
+
   function removeRecipient(id: string) {
     setRecipients((current) => current.filter((recipient) => recipient.id !== id));
     // Fields belonging to a removed recipient go with them, or the send would
@@ -141,11 +191,15 @@ export function SendFlow({
   }
 
   // --- fields --------------------------------------------------------------
-  function placeField(event: React.MouseEvent<HTMLDivElement>) {
-    const target = recipients[activeRecipient];
-    if (!target || !pageRef.current) return;
+  function placeField(event: React.MouseEvent<HTMLDivElement>, pageNumber: number) {
+    // A drag that ends over the page also fires a click here. Without this, every
+    // repositioned field left a duplicate behind where the drag finished.
+    if (Date.now() - dragEndedAt.current < 250) return;
 
-    const rect = pageRef.current.getBoundingClientRect();
+    const target = validRecipients[activeRecipient] ?? recipients[activeRecipient];
+    if (!target) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
     const size = FIELD_SIZES[tool];
 
     // Centre the field on the click, which is where the eye expects it.
@@ -158,7 +212,7 @@ export function SendFlow({
         id: crypto.randomUUID(),
         recipientId: target.id,
         type: tool,
-        page,
+        page: pageNumber,
         x: Math.max(0, Math.min(1 - size.w, x)),
         y: Math.max(0, Math.min(1 - size.h, y)),
         w: size.w,
@@ -170,17 +224,22 @@ export function SendFlow({
 
   function dragField(event: React.PointerEvent, fieldId: string) {
     const field = fields.find((item) => item.id === fieldId);
-    if (!field || !pageRef.current) return;
+    const pageNode = (event.currentTarget as HTMLElement).parentElement;
+    if (!field || !pageNode) return;
 
     event.preventDefault();
     event.stopPropagation();
 
-    const rect = pageRef.current.getBoundingClientRect();
+    const rect = pageNode.getBoundingClientRect();
     const startX = event.clientX;
     const startY = event.clientY;
     const origin = { x: field.x, y: field.y };
+    let moved = false;
 
     function onMove(moveEvent: PointerEvent) {
+      if (Math.abs(moveEvent.clientX - startX) > 2 || Math.abs(moveEvent.clientY - startY) > 2) {
+        moved = true;
+      }
       const x = origin.x + (moveEvent.clientX - startX) / rect.width;
       const y = origin.y + (moveEvent.clientY - startY) / rect.height;
       setFields((current) =>
@@ -199,6 +258,9 @@ export function SendFlow({
     function onUp() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      // Only for an actual drag; a plain click on a field should not affect the
+      // page's own handler.
+      if (moved) dragEndedAt.current = Date.now();
     }
 
     window.addEventListener("pointermove", onMove);
@@ -449,6 +511,23 @@ export function SendFlow({
               Add recipient
             </Button>
 
+            <label className="mt-6 flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-surface p-4 text-sm">
+              <input
+                type="checkbox"
+                checked={selfSigning}
+                onChange={(event) => toggleSelfSigning(event.target.checked)}
+                className="mt-0.5 size-4 shrink-0 accent-[color:var(--primary)]"
+              />
+              <span className="min-w-0">
+                <span className="block font-medium">I am also signing</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Adds you as a recipient so you can place your own fields. You get a
+                  signing link by email like everyone else, and your signature is recorded
+                  in the audit trail the same way.
+                </span>
+              </span>
+            </label>
+
             <div className="mt-8 space-y-2">
               <Label htmlFor="routing">Signing order</Label>
               <Select
@@ -532,88 +611,84 @@ export function SendFlow({
               </p>
             </div>
 
-            <div ref={viewportRef} className="min-w-0 flex-1 overflow-auto bg-surface-muted p-8">
+            <div
+              ref={viewportRef}
+              // scrollbar-gutter keeps the column width from changing when the
+              // scrollbar appears; that wobble used to restart the canvas render
+              // on every frame and leave the page blank.
+              style={{ scrollbarGutter: "stable" }}
+              className="min-w-0 flex-1 overflow-y-auto bg-surface-muted p-8"
+            >
               {doc ? (
-                <div
-                  ref={pageRef}
-                  onClick={placeField}
-                  className="relative mx-auto cursor-crosshair shadow-sm ring-1 ring-border"
-                  style={{ width }}
-                >
-                  <PageCanvas doc={doc} pageNumber={page} cssWidth={width} />
-
-                  {fields
-                    .filter((field) => field.page === page)
-                    .map((field) => {
-                      const index = validRecipients.findIndex(
-                        (recipient) => recipient.id === field.recipientId,
-                      );
-                      const color = recipientColor(Math.max(0, index));
-                      return (
+                <div className="mx-auto flex flex-col items-center gap-6">
+                  {Array.from({ length: pageCount }, (_, index) => index + 1).map(
+                    (pageNumber) => (
+                      <div key={pageNumber} className="w-full">
+                        <p className="mb-1.5 text-center text-[11px] tabular-nums text-muted-foreground">
+                          Page {pageNumber} of {pageCount}
+                        </p>
                         <div
-                          key={field.id}
-                          onPointerDown={(event) => dragField(event, field.id)}
-                          style={{
-                            left: `${field.x * 100}%`,
-                            top: `${field.y * 100}%`,
-                            width: `${field.w * 100}%`,
-                            height: `${field.h * 100}%`,
-                            borderColor: color,
-                            backgroundColor: `${color}1a`,
-                          }}
-                          className="group absolute flex cursor-move items-center justify-center rounded-[3px] border-2"
+                          onClick={(event) => placeField(event, pageNumber)}
+                          className="relative mx-auto cursor-crosshair bg-white shadow-sm ring-1 ring-border"
+                          style={{ width }}
                         >
-                          <span
-                            className="truncate px-1 text-[10px] font-medium"
-                            style={{ color }}
-                          >
-                            {FIELD_LABELS[field.type]}
-                          </span>
-                          <button
-                            type="button"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setFields((current) =>
-                                current.filter((item) => item.id !== field.id),
+                          <PageCanvas doc={doc} pageNumber={pageNumber} cssWidth={width} />
+
+                          {fields
+                            .filter((field) => field.page === pageNumber)
+                            .map((field) => {
+                              const index = validRecipients.findIndex(
+                                (recipient) => recipient.id === field.recipientId,
                               );
-                            }}
-                            aria-label="Remove field"
-                            className="absolute -right-2 -top-2 hidden size-4 items-center justify-center rounded-full border border-border bg-surface group-hover:flex"
-                          >
-                            <Trash2 className="size-2.5 text-destructive" aria-hidden />
-                          </button>
+                              const color = recipientColor(Math.max(0, index));
+                              return (
+                                <div
+                                  key={field.id}
+                                  onPointerDown={(event) => dragField(event, field.id)}
+                                  onClick={(event) => event.stopPropagation()}
+                                  style={{
+                                    left: `${field.x * 100}%`,
+                                    top: `${field.y * 100}%`,
+                                    width: `${field.w * 100}%`,
+                                    height: `${field.h * 100}%`,
+                                    borderColor: color,
+                                    backgroundColor: `${color}1a`,
+                                  }}
+                                  className="group absolute flex cursor-move items-center justify-center rounded-[3px] border-2"
+                                >
+                                  <span
+                                    className="truncate px-1 text-[10px] font-medium"
+                                    style={{ color }}
+                                  >
+                                    {FIELD_LABELS[field.type]}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setFields((current) =>
+                                        current.filter((item) => item.id !== field.id),
+                                      );
+                                    }}
+                                    aria-label="Remove field"
+                                    className="absolute -right-2 -top-2 hidden size-4 items-center justify-center rounded-full border border-border bg-surface group-hover:flex"
+                                  >
+                                    <Trash2 className="size-2.5 text-destructive" aria-hidden />
+                                  </button>
+                                </div>
+                              );
+                            })}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ),
+                  )}
                 </div>
               ) : (
                 <p className="py-16 text-center text-sm text-muted-foreground">
                   Opening document…
                 </p>
               )}
-
-              <div className="mt-6 flex items-center justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={page <= 1}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
-                >
-                  <ChevronLeft className="size-4" aria-hidden />
-                </button>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  Page {page} / {pageCount}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-                  disabled={page >= pageCount}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
-                >
-                  <ChevronRight className="size-4" aria-hidden />
-                </button>
-              </div>
             </div>
           </div>
         ) : null}

@@ -29,8 +29,20 @@ export type VersionRow = {
   created_at: string;
 };
 
+/**
+ * How far a live signature request has got. Null when nothing is out for
+ * signature — which is different from "nobody has signed", and the dashboard
+ * needs to tell those apart.
+ */
+export type SigningProgress = {
+  signed: number;
+  total: number;
+  declined: number;
+};
+
 export type ContractWithLatest = ContractRow & {
   latest: VersionRow | null;
+  signing: SigningProgress | null;
 };
 
 /**
@@ -48,7 +60,8 @@ export async function listContracts(): Promise<ContractWithLatest[]> {
        contract_versions (
          id, version_no, kind, state, page_count, byte_size,
          sha256, thumbnail_path, original_name, created_at
-       )`,
+       ),
+       envelopes ( status, recipients ( status ) )`,
     )
     .is("deleted_at", null)
     .is("archived_at", null)
@@ -59,11 +72,15 @@ export async function listContracts(): Promise<ContractWithLatest[]> {
     return [];
   }
 
-  type Joined = ContractRow & { contract_versions: VersionRow[] | null };
+  type Joined = ContractRow & {
+    contract_versions: VersionRow[] | null;
+    envelopes: EnvelopeProgressRow[] | null;
+  };
 
-  return ((data ?? []) as Joined[]).map(({ contract_versions, ...contract }) => ({
+  return ((data ?? []) as Joined[]).map(({ contract_versions, envelopes, ...contract }) => ({
     ...contract,
     latest: newestReady(contract_versions),
+    signing: progressOf(envelopes),
   }));
 }
 
@@ -78,7 +95,8 @@ export async function getContract(id: string): Promise<ContractWithLatest | null
        contract_versions (
          id, version_no, kind, state, page_count, byte_size,
          sha256, thumbnail_path, original_name, created_at
-       )`,
+       ),
+       envelopes ( status, recipients ( status ) )`,
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -86,11 +104,16 @@ export async function getContract(id: string): Promise<ContractWithLatest | null
 
   if (error || !data) return null;
 
-  const { contract_versions, ...contract } = data as ContractRow & {
+  const { contract_versions, envelopes, ...contract } = data as ContractRow & {
     contract_versions: VersionRow[] | null;
+    envelopes: EnvelopeProgressRow[] | null;
   };
 
-  return { ...contract, latest: newestReady(contract_versions) };
+  return {
+    ...contract,
+    latest: newestReady(contract_versions),
+    signing: progressOf(envelopes),
+  };
 }
 
 export async function listVersions(contractId: string): Promise<VersionRow[]> {
@@ -120,6 +143,30 @@ export async function statusCounts(): Promise<Record<string, number>> {
     counts[row.status] = (counts[row.status] ?? 0) + 1;
   }
   return counts;
+}
+
+type EnvelopeProgressRow = { status: string; recipients: { status: string }[] | null };
+
+/**
+ * Counts signatures across whichever envelope is still live.
+ *
+ * Only sent and partially_signed envelopes count: a completed one needs no flag,
+ * and a voided one's recipients are irrelevant.
+ */
+function progressOf(envelopes: EnvelopeProgressRow[] | null): SigningProgress | null {
+  const live = (envelopes ?? []).filter(
+    (envelope) => envelope.status === "sent" || envelope.status === "partially_signed",
+  );
+  if (live.length === 0) return null;
+
+  const recipients = live.flatMap((envelope) => envelope.recipients ?? []);
+  if (recipients.length === 0) return null;
+
+  return {
+    signed: recipients.filter((recipient) => recipient.status === "signed").length,
+    total: recipients.length,
+    declined: recipients.filter((recipient) => recipient.status === "declined").length,
+  };
 }
 
 function newestReady(versions: VersionRow[] | null): VersionRow | null {

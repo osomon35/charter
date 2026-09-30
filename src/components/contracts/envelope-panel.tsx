@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Ban, Bell, Check, Clock, Eye, X } from "lucide-react";
 import { nudgeRecipient, voidEnvelope } from "@/lib/envelopes/send-actions";
 import {
+  RECIPIENT_STATUS_CLASSES,
   RECIPIENT_STATUS_LABELS,
   recipientColor,
   type RecipientStatus,
@@ -87,12 +88,12 @@ export function EnvelopePanel({ envelope }: { envelope: EnvelopeView }) {
                 ) : null}
               </div>
 
-              <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                <Icon className="size-3.5" aria-hidden />
-                <span className="hidden sm:inline">
-                  {RECIPIENT_STATUS_LABELS[recipient.status]}
-                </span>
-              </span>
+              <Badge
+                className={`shrink-0 gap-1.5 ${RECIPIENT_STATUS_CLASSES[recipient.status]}`}
+              >
+                <Icon className="size-3" aria-hidden />
+                {RECIPIENT_STATUS_LABELS[recipient.status]}
+              </Badge>
 
               {active && recipient.status !== "signed" && recipient.status !== "declined" ? (
                 <Button

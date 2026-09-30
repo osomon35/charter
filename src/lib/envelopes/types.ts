@@ -55,6 +55,15 @@ export const RECIPIENT_STATUS_LABELS: Record<RecipientStatus, string> = {
   declined: "Declined",
 };
 
+/** Badge classes per recipient status. Signed reads as done at a glance. */
+export const RECIPIENT_STATUS_CLASSES: Record<RecipientStatus, string> = {
+  pending: "border-border bg-muted text-muted-foreground",
+  sent: "border-border-strong bg-surface-muted text-foreground",
+  viewed: "border-primary/25 bg-primary-subtle text-foreground",
+  signed: "border-success/40 bg-success/10 text-success",
+  declined: "border-destructive/40 bg-destructive-subtle text-destructive",
+};
+
 /** Distinct colours so each recipient's fields are tellable apart at a glance. */
 export const RECIPIENT_COLORS = [
   "#3b5b92",
