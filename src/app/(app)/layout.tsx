@@ -2,6 +2,7 @@ import { requireOwner } from "@/lib/auth";
 import { SidebarNav } from "@/components/shell/sidebar";
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
+import { DevBanner } from "@/components/shell/dev-banner";
 
 /**
  * Every route in this group is gated here. requireOwner() redirects anyone
@@ -41,6 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <DevBanner />
         <div className="border-b border-border md:hidden">
           <header className="flex h-14 items-center justify-between gap-4 px-4">
             <span className="text-sm font-semibold tracking-tight">Charter</span>

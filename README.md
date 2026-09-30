@@ -1,11 +1,11 @@
 # Charter
 
-Private, single-tenant contract management and electronic signature. One owner
-(you), external signers who never hold an account, and a document history where
-the original upload is never mutated.
+Private contract management and electronic signature. One owner, external
+signers who never hold an account, and a document history where the original
+upload is never mutated.
 
-Built with Next.js (App Router), TypeScript, Tailwind v4, Supabase (Postgres /
-Auth / Storage), `pdf-lib`, and Resend. Deploys to Vercel.
+Next.js (App Router) · TypeScript · Tailwind v4 · Supabase (Postgres, Auth,
+Storage) · pdf-lib · pdf.js · Resend · Vercel.
 
 ---
 
@@ -13,12 +13,19 @@ Auth / Storage), `pdf-lib`, and Resend. Deploys to Vercel.
 
 | Phase | Scope | State |
 | --- | --- | --- |
-| 1 | Auth, allowlist, route protection, app shell | **Done** |
-| 2 | PDF upload + private storage | Not started |
-| 3 | Overlay PDF editor | Not started |
-| 4 | Signatures | Not started |
-| 5 | Send for signature, signer flow, audit trail | Not started |
-| 6 | Dashboard, folders, tags, search, reminders | Not started |
+| 1 | Auth, owner allowlist, route protection, app shell | Done |
+| 2 | PDF upload, private storage, verification, thumbnails | Done |
+| 3 | Full-screen overlay editor, flatten to new version | Done |
+| 4 | Reusable signatures and initials | Done |
+| 5 | Recipients, fields, routing, signer flow, audit, certificate | Done |
+| 6 | Folders, tags, search, filters, archive, trash UI, reminders | **Not built** |
+| 7 | Workspaces, invites, roles | **Not built** |
+
+**What Phase 6 means in practice:** contracts appear in one flat list capped at
+200. There is no folder UI, no tags, no search, no filters, no Trash view, and no
+automatic reminders. Deleting a contract soft-deletes it — the row survives with
+a `deleted_at` stamp and the nightly cron purges it after 30 days — but there is
+no screen to restore one. The manual **Nudge** button on a contract works.
 
 ---
 
@@ -26,142 +33,174 @@ Auth / Storage), `pdf-lib`, and Resend. Deploys to Vercel.
 
 ### 1. Supabase
 
-Create a project (pick a region near you — `eu-west-3` Paris or
-`eu-central-1` Frankfurt). Keep the database password somewhere safe; you will
-need it for the SQL editor.
+Create a project. Then, in **SQL Editor → New query**, run each file in
+[`supabase/migrations/`](supabase/migrations) in order, pasting the contents.
+Migrations are applied by hand, not through the CLI.
 
-Then run the migration. Open **SQL Editor → New query**, paste the whole of
-[`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql),
-and run it.
+Two things to know about this database's history:
 
-**Before you run it, edit the seed insert near the top** so it lists your own
-address:
+* Several migrations begin by moving a same-named table into a timestamped
+  `pre_charter_*` schema. This project's own database already contained tables
+  called `contracts`, `contract_versions` and `signatures`, plus an
+  `enforce_email_allowlist` function, from some earlier use. `create table if not
+  exists` adopts such a table silently — no error, but without the expected
+  columns — which surfaces later as PostgREST reporting a missing column. Those
+  guards move the stranger aside rather than dropping it.
+* Every migration ends with `notify pgrst, 'reload schema'`. Without it
+  PostgREST keeps reporting columns as missing on a table that is already
+  correct.
+
+Before running `0001_init.sql`, edit its seed insert so it lists your address:
 
 ```sql
 insert into public.owner_allowlist (email, note)
-values ('joao@cobalto.cc', 'owner')
+values ('you@example.com', 'owner')
 on conflict (email) do nothing;
 ```
 
-Migrations are applied by pasting SQL, not through the Supabase CLI. Every
-future schema change is written to `supabase/migrations/` **and** printed in
-full so it can be pasted the same way.
-
 ### 2. Create your user
 
-**Authentication → Users → Add user**, with your allowlisted address and a
-password. Tick *Auto Confirm User*. Order does not matter — nothing in this
-schema touches `auth.users`.
+**Authentication → Users → Add user**, your allowlisted address, tick *Auto
+Confirm User*. Then **Authentication → Sign In / Providers → Allow new users to
+sign up → off**.
 
-Then turn signups off: **Authentication → Sign In / Providers → Allow new users
-to sign up → off**. That, plus `shouldCreateUser: false` on the magic-link
-call, is what stops anyone else obtaining an account. An earlier draft used a
-trigger on `auth.users` for this; don't. An exception raised there surfaces only
-as "Database error creating new user" and blocks all account creation.
+Nothing in this schema touches `auth.users`. An earlier draft enforced the
+allowlist with a trigger there; don't. An exception raised in an `auth.users`
+trigger surfaces only as "Database error creating new user" and blocks all
+account creation, with the real cause visible nowhere but the Postgres log.
 
-The profile row is created by the app on first sign-in, so a user created before
-the migration ran is fine.
+### 3. Resend
 
-### 3. Resend (needed from Phase 5; worth doing now for auth email)
+1. **Domains → Add Domain**, then publish the DNS records it gives you. They sit
+   on a `send.` subdomain plus a DKIM TXT, so existing email on the domain is
+   unaffected.
+2. **API Keys → Create**, sending access only.
+3. Optional but worth it: point Supabase Auth's SMTP at Resend
+   (`smtp.resend.com`, port 465, user `resend`, password = the API key).
+   Supabase's shared sender caps at a handful of emails per hour, which silently
+   breaks magic links once you start testing properly.
 
-1. Add and verify your sending domain, publishing the SPF and DKIM DNS records
-   Resend gives you.
-2. **API Keys → Create**, with *Sending access* only. That value is
-   `RESEND_API_KEY`.
-3. Point Supabase Auth at it so magic links are not throttled by Supabase's
-   shared sender: **Supabase → Authentication → SMTP Settings**
-
-   | Field | Value |
-   | --- | --- |
-   | Host | `smtp.resend.com` |
-   | Port | `465` |
-   | Username | `resend` |
-   | Password | your `RESEND_API_KEY` |
-   | Sender email | the address in `EMAIL_FROM` |
-
-   Supabase's built-in sender caps at a handful of emails per hour, which will
-   silently break magic links once you start testing in earnest.
+A From address does not need a mailbox to exist — only the domain needs
+verifying. But replies to an address nobody reads are lost, so either use a real
+address or rely on Reply-To.
 
 ### 4. Environment
 
-Copy `.env.example` to `.env.local` and fill it in. Every variable is
-documented in that file. Two of them you generate yourself:
+Copy `.env.example` to `.env.local`, and paste the same values into **Vercel →
+Settings → Environment Variables**. Every variable is documented in that file.
+Mark `SUPABASE_SERVICE_ROLE_KEY`, `SIGNER_TOKEN_PEPPER` and `RESEND_API_KEY`
+**Sensitive** so they cannot be read back out of the dashboard.
+
+Generate the two secrets yourself:
 
 ```sh
 openssl rand -base64 32   # SIGNER_TOKEN_PEPPER
 openssl rand -base64 32   # CRON_SECRET
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` bypasses RLS entirely. It is server-only and must
-never be renamed into a `NEXT_PUBLIC_*` variable.
+`SIGNER_TOKEN_PEPPER` is required before anything can be sent for signature, and
+**must never change once links are live** — it is the key the stored token hashes
+are derived from, so rotating it invalidates every outstanding signing link.
 
-Keep `OWNER_ALLOWLIST` and the `owner_allowlist` table in agreement. The table
-is the authority — it backs `is_owner()`, which every RLS policy is built on —
-and the environment variable is the app-layer mirror that lets the login route
-reject an address before Supabase is involved.
+`NEXT_PUBLIC_APP_URL` is optional. Set it for a custom domain; leave it unset and
+Vercel's own domain is used. A wrong value is worse than none — it puts a dead
+host into every signing email.
 
-### 5. Vercel
+### 5. Deploy
 
-Import the repository, then paste the same variables into **Project Settings →
-Environment Variables**. Set `NEXT_PUBLIC_APP_URL` to the deployment's own
-origin (`https://charter-yourteam.vercel.app` or your custom domain) — magic
-links are built from it, so a stale value sends people to the wrong place.
+Import the repo into Vercel. The cron in [`vercel.json`](vercel.json) registers
+itself on deploy.
 
-Also add your deployment origin to **Supabase → Authentication → URL
-Configuration → Redirect URLs**, including `.../auth/callback`.
+Add your deployment origin to **Supabase → Authentication → URL Configuration →
+Redirect URLs**, including `/auth/callback`.
 
 ---
 
-## Working on it locally
+## Before real use
 
-This machine has no Node runtime, so the loop is: edit, commit, push, and let
-GitHub Actions and the Vercel preview do the verifying.
+- [ ] `REVEAL_SIGNING_LINKS` **unset**. It prints live signing credentials into
+      the UI. A banner appears across the app while it is on.
+- [ ] `SIGNER_TOKEN_PEPPER` set, Sensitive, and backed up somewhere.
+- [ ] Service-role key rotated if it has ever been pasted anywhere shared.
+- [ ] Signups disabled in Supabase.
+- [ ] Resend domain verified, and a test envelope actually received.
+- [ ] Your name set in **Settings → Account** — it is the From line recipients
+      see.
+- [ ] One end-to-end run: upload, edit, send, sign, confirm the signed PDF has a
+      certificate page and that the audit trail reads correctly.
 
-- `.github/workflows/ci.yml` runs typecheck, lint, and build on every push.
-  The build uses placeholder credentials — nothing may read a real secret at
-  build time, only at request time.
-- `.github/workflows/lockfile.yml` is manual (**Actions → Refresh lockfile →
-  Run workflow**). Run it after any dependency change to generate and commit
-  `package-lock.json`. Until it has run once, builds resolve dependencies
-  fresh and are not reproducible.
+---
 
-With Node available, the usual `npm install` / `npm run dev` works too.
+## Working on it
+
+This machine has no Node runtime, so the loop is edit, commit, push, and let
+GitHub Actions and the Vercel build do the verifying.
+
+- `.github/workflows/ci.yml` runs typecheck, lint and build on every push. The
+  build uses placeholder credentials — nothing may read a real secret at build
+  time, only at request time.
+- `.github/workflows/lockfile.yml` is manual (**Actions → Refresh lockfile → Run
+  workflow**). Run it after any dependency change.
+
+With Node available, `npm install` and `npm run dev` work as usual, and
+`npm run seed` creates a few sample contracts with generated PDFs.
 
 ---
 
 ## Security model
 
-Authorization is layered, and no single layer is load-bearing on its own.
+**Every export from a `"use server"` file is a public HTTP endpoint.** Two
+internal helpers were once exported from action files: one took a destination
+address and a message body, making it an open mail relay through the project's
+Resend account; the other completed an envelope by id, bypassing the requirement
+that every recipient had signed. Both now live in plain server-only modules
+(`lib/envelopes/notify.ts`, `lib/envelopes/complete.ts`). When adding an action,
+check that it authorises before it acts.
 
-**RLS, deny by default.** Every table has RLS enabled and forced, with no
-permissive policy for `anon`. Owner access is gated on `public.is_owner()`,
-which checks the JWT's email against `owner_allowlist`. Removing an address
-from that table revokes access immediately, live session or not.
+**RLS, deny by default.** Every table has RLS enabled, with no permissive policy
+for `anon`. Owner access is gated on `public.is_owner()`, which checks the JWT's
+email against `owner_allowlist`; remove an address there and access ends
+immediately, live session or not. RLS is enabled but never FORCEd — FORCE applies
+to the table owner too, which locks out the `SECURITY DEFINER` functions that are
+the only permitted writers of some tables.
 
-**A trigger on `auth.users`.** A non-allowlisted address cannot become an
-account at all, so a leaked or forwarded magic link is inert.
+**`requireOwner()`, not middleware.** `lib/auth.ts` is the boundary, called by
+every protected page and every mutation. Middleware only refreshes the session
+cookie and bounces anonymous page requests — deliberately, because Next.js
+middleware has had header-spoofing bypasses (CVE-2025-29927) and cannot see which
+row a request concerns. It does not run on `/api` at all; those routes authorise
+themselves.
 
-**`requireOwner()`, not middleware.** `src/lib/auth.ts` is the real
-boundary, called by every protected page and every mutation. Middleware only
-refreshes the session cookie and bounces obvious anonymous traffic —
-deliberately, because Next.js middleware has had header-spoofing bypasses
-(CVE-2025-29927) and cannot see which row a request concerns.
+**Signer tokens.** 32 random bytes; what is stored is HMAC-SHA256(token, pepper).
+The token exists only in the emailed URL and the incoming request — never logged,
+never in an audit row, never shown back to the owner. Signing, declining, voiding
+and expiring all clear the hash, which is what invalidates a link. A nudge
+therefore mints a new token and invalidates the old one; the original cannot be
+re-sent because it was never stored.
 
-**Login rate limiting.** Two fixed windows in Postgres, per IP (20 / 10 min)
-and per address (8 / 10 min). No Redis dependency. It fails closed: if the
-accounting call errors, the attempt is refused.
+**`resolveSignerToken` is the whole authorization boundary for unauthenticated
+signing**, in application code because no RLS policy can express "this bearer
+token maps to this one recipient row". Refusals are indistinguishable from
+outside — expired, wrong, already-signed and not-your-turn all present alike.
 
-**Uniform failure messages.** Wrong password, unknown address, and
-not-allowlisted all produce the same text, and the magic-link route reports
-"a link is on its way" whether or not it sent one. Nothing about the login
-screen reveals which addresses exist.
+**Rate limiting** in Postgres, no Redis: login per IP and per address, the signer
+page and its document fetch per IP and per token. Fails closed.
 
-**`noindex` everywhere**, as an `X-Robots-Tag` header on every route in
-`next.config.ts` plus route-level metadata, alongside `nosniff`, `DENY`
-framing, HSTS, and a restrictive `Permissions-Policy`.
+**Uploads** are verified after they land, not before: `%PDF-` magic bytes, page
+count via pdf-lib, SHA-256. Nothing the client claims about a file is trusted or
+stored. A rejected upload has its object and contract shell removed.
 
-Public routes are exactly `/login`, `/auth/*`, `/sign/*`, and `/legal`.
-Everything else requires a session.
+**The audit trail is append-only** — `audit_events` has select and insert
+policies and no update or delete, so history cannot be rewritten through the API,
+including by the owner. That is what makes the recorded hashes worth anything.
+
+Public routes are exactly `/login`, `/auth/*`, `/sign/*`, `/api/sign/*` and
+`/legal`.
+
+**Not done:** there is no Content-Security-Policy header. Adding one means
+allowing the pdf.js worker from jsdelivr, `blob:` and `data:` URIs, and Supabase
+Storage, and getting it wrong breaks the editor silently. Worth doing with a
+browser to hand.
 
 ---
 
@@ -170,21 +209,22 @@ Everything else requires a session.
 ```
 src/
   app/
-    (app)/            Owner-only. The group layout calls requireOwner().
-    login/            Password + magic-link sign-in, server actions
-    auth/callback/    Magic-link code exchange, re-checks the allowlist
-    sign/[token]/     The only genuinely public route (Phase 5)
-    legal/            Electronic signature notice
+    (app)/            Owner-only. Group layout calls requireOwner().
+    editor/[id]/      Full-screen overlay editor (outside the shell)
+    send/[id]/        Full-screen send flow (outside the shell)
+    sign/[token]/     The signer experience — public, token-authorised
+    api/
+      versions/[id]/  Authorised document and thumbnail delivery
+      sign/[token]/   The signer's own document fetch
+      cron/           Daily maintenance, CRON_SECRET-authenticated
   components/
-    ui/               Primitives — button, input, label, card, alert
-    shell/            Sidebar, sign-out, page header, empty state
+    ui/               Primitives
+    editor/ send/ signer/ signatures/ contracts/ shell/ settings/
   lib/
     auth.ts           requireOwner() — the authorization boundary
-    allowlist.ts      App-layer mirror of owner_allowlist
-    rate-limit.ts     Postgres-backed fixed-window limiter
-    env.ts            Public config    env.server.ts  Secrets
-    supabase/         Browser, server, admin, and middleware clients
-  middleware.ts       Session refresh + anonymous redirect only
+    editor/           Element model, history, snapping, flatten
+    envelopes/        Tokens, signer resolution, completion, certificate
+    email/            Resend REST client, templates, sender identity
 supabase/migrations/  Paste-ready SQL, applied by hand
 ```
 
@@ -193,11 +233,11 @@ supabase/migrations/  Paste-ready SQL, applied by hand
 ## Electronic signature notice
 
 Signatures created in Charter are **simple electronic signatures**. Their
-validity rests on the signer's demonstrated intent to sign — captured through
-an explicit consent step before any field can be completed — together with an
-audit trail recording every view, signature, and decline with a timestamp, IP
-address, user agent, and a SHA-256 hash of the document at each stage. A
-certificate of completion summarising this is appended to the final PDF.
+validity rests on the signer's demonstrated intent to sign — captured through an
+explicit consent step before any field can be completed — together with an audit
+trail recording every view, signature and decline with a timestamp, IP address,
+user agent, and a SHA-256 hash of the document at each stage. A certificate of
+completion summarising this is appended to the final PDF.
 
 This is consistent with the US ESIGN Act and with simple electronic signatures
 under EU eIDAS (Regulation 910/2014). It is **not** an advanced or qualified

@@ -1,4 +1,10 @@
 -- ===========================================================================
+-- !! DESTRUCTIVE !!  This DROPS every Charter table and all the data in them.
+--
+-- Kept only as the control case it was written for: proving whether a problem
+-- lies in this schema or in the database around it. There is no undo. Do not run
+-- it against anything holding real contracts.
+--
 -- Charter — full teardown of everything the migrations created.
 --
 -- Run this to get back to a virgin database. It is the control case: if a user
