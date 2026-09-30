@@ -31,7 +31,7 @@ Create a project (pick a region near you — `eu-west-3` Paris or
 need it for the SQL editor.
 
 Then run the migration. Open **SQL Editor → New query**, paste the whole of
-[`supabase/migrations/0001_auth_and_allowlist.sql`](supabase/migrations/0001_auth_and_allowlist.sql),
+[`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql),
 and run it.
 
 **Before you run it, edit the seed insert near the top** so it lists your own
@@ -49,15 +49,18 @@ full so it can be pasted the same way.
 
 ### 2. Create your user
 
-Order matters: the migration installs a trigger on `auth.users` that refuses to
-create any account whose address is not in `owner_allowlist`. So migrate first,
-then create the user.
-
 **Authentication → Users → Add user**, with your allowlisted address and a
-password. Tick *Auto Confirm User*.
+password. Tick *Auto Confirm User*. Order does not matter — nothing in this
+schema touches `auth.users`.
 
-To confirm the guard works, try adding a second user with an address that is
-not on the list — Supabase will reject it.
+Then turn signups off: **Authentication → Sign In / Providers → Allow new users
+to sign up → off**. That, plus `shouldCreateUser: false` on the magic-link
+call, is what stops anyone else obtaining an account. An earlier draft used a
+trigger on `auth.users` for this; don't. An exception raised there surfaces only
+as "Database error creating new user" and blocks all account creation.
+
+The profile row is created by the app on first sign-in, so a user created before
+the migration ran is fine.
 
 ### 3. Resend (needed from Phase 5; worth doing now for auth email)
 
