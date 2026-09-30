@@ -42,6 +42,35 @@ const SELECT = `
 export async function queryContracts(filters: Filters): Promise<ContractPage> {
   const supabase = await createClient();
 
+  // Tag filtering runs as its own lookup rather than an inner-join embed.
+  //
+  // The embed version needed a second select string built with .replace(), which
+  // makes it non-literal — supabase-js then cannot derive a row type from it, and
+  // the two builders end up with incompatible types. It also meant applying every
+  // other filter twice. One extra small query, only when tags are actually
+  // filtered on, costs less than either.
+  //
+  // Several tags mean "carries any of these", which is what the inner join did.
+  let tagMatchedIds: string[] | null = null;
+
+  if (filters.tagIds.length > 0) {
+    const { data: joins } = await supabase
+      .from("contract_tags")
+      .select("contract_id")
+      .in("tag_id", filters.tagIds);
+
+    tagMatchedIds = [
+      ...new Set(((joins ?? []) as { contract_id: string }[]).map((row) => row.contract_id)),
+    ];
+
+    // No contract carries those tags, so nothing can match. Returning early
+    // avoids sending an empty IN list, which Postgres treats as always-false but
+    // PostgREST renders awkwardly.
+    if (tagMatchedIds.length === 0) {
+      return { rows: [], total: 0, page: 1, pageCount: 1 };
+    }
+  }
+
   let request = supabase.from("contracts").select(SELECT, { count: "exact" });
 
   // Views are mutually exclusive states, not filters that stack.
@@ -53,6 +82,7 @@ export async function queryContracts(filters: Filters): Promise<ContractPage> {
     request = request.not("deleted_at", "is", null);
   }
 
+  if (tagMatchedIds) request = request.in("id", tagMatchedIds);
   if (filters.statuses.length > 0) request = request.in("status", filters.statuses);
   if (filters.folderId) request = request.eq("folder_id", filters.folderId);
   if (filters.counterparty) {
@@ -60,32 +90,6 @@ export async function queryContracts(filters: Filters): Promise<ContractPage> {
   }
   if (filters.from) request = request.gte("effective_date", filters.from);
   if (filters.to) request = request.lte("effective_date", filters.to);
-
-  // Tag filtering needs the join rows present, so it switches the embed to an
-  // inner join for this query only.
-  if (filters.tagIds.length > 0) {
-    request = supabase
-      .from("contracts")
-      .select(SELECT.replace("contract_tags (", "contract_tags!inner ("), {
-        count: "exact",
-      })
-      .in("contract_tags.tag_id", filters.tagIds);
-
-    if (filters.view === "live") {
-      request = request.is("deleted_at", null).is("archived_at", null);
-    } else if (filters.view === "archived") {
-      request = request.is("deleted_at", null).not("archived_at", "is", null);
-    } else {
-      request = request.not("deleted_at", "is", null);
-    }
-    if (filters.statuses.length > 0) request = request.in("status", filters.statuses);
-    if (filters.folderId) request = request.eq("folder_id", filters.folderId);
-    if (filters.counterparty) {
-      request = request.ilike("counterparty_name", `%${filters.counterparty}%`);
-    }
-    if (filters.from) request = request.gte("effective_date", filters.from);
-    if (filters.to) request = request.lte("effective_date", filters.to);
-  }
 
   if (filters.query) {
     // websearch_to_tsquery tolerates whatever a person actually types — bare
@@ -97,23 +101,22 @@ export async function queryContracts(filters: Filters): Promise<ContractPage> {
     });
   }
 
-  switch (filters.sort) {
-    case "title":
-      request = request.order("title", { ascending: true });
-      break;
-    case "created":
-      request = request.order("created_at", { ascending: false });
-      break;
-    case "expiry":
-      // nullsFirst false: contracts with no expiry are not "expiring soonest".
-      request = request.order("expiry_date", { ascending: true, nullsFirst: false });
-      break;
-    default:
-      request = request.order("updated_at", { ascending: false });
-  }
+  // Ordering goes into a new binding rather than back into `request`.
+  // .order() returns a transform builder, and the filter builder the reassignment
+  // is typed against extends it — so the assignment is backwards and will not
+  // type-check. A ternary keeps one consistent type throughout.
+  const ordered =
+    filters.sort === "title"
+      ? request.order("title", { ascending: true })
+      : filters.sort === "created"
+        ? request.order("created_at", { ascending: false })
+        : filters.sort === "expiry"
+          ? // nullsFirst false: no expiry date is not "expiring soonest".
+            request.order("expiry_date", { ascending: true, nullsFirst: false })
+          : request.order("updated_at", { ascending: false });
 
   const offset = (filters.page - 1) * PAGE_SIZE;
-  const { data, error, count } = await request.range(offset, offset + PAGE_SIZE - 1);
+  const { data, error, count } = await ordered.range(offset, offset + PAGE_SIZE - 1);
 
   if (error) {
     console.error("query_contracts_failed", { message: error.message });
