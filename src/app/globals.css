@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Charter's palette. One accent (a muted slate-blue), everything else
+   neutral. Borders carry the structure; there are no shadows above sm and no
+   gradients anywhere.
+--------------------------------------------------------------------------- */
+:root {
+  --radius: 0.5rem;
+
+  --background: oklch(0.994 0.001 250);
+  --foreground: oklch(0.24 0.012 258);
+
+  --surface: oklch(1 0 0);
+  --surface-muted: oklch(0.976 0.002 255);
+
+  --muted: oklch(0.968 0.003 255);
+  --muted-foreground: oklch(0.51 0.012 258);
+
+  --border: oklch(0.915 0.004 258);
+  --border-strong: oklch(0.855 0.006 258);
+  --input: oklch(0.915 0.004 258);
+
+  --primary: oklch(0.49 0.108 258);
+  --primary-foreground: oklch(0.99 0.002 250);
+  --primary-subtle: oklch(0.955 0.017 258);
+
+  --ring: oklch(0.49 0.108 258);
+
+  --destructive: oklch(0.52 0.176 25);
+  --destructive-foreground: oklch(0.99 0.002 250);
+  --destructive-subtle: oklch(0.966 0.018 25);
+
+  --success: oklch(0.52 0.104 155);
+  --warning: oklch(0.62 0.122 72);
+}
+
+:root.dark {
+  --background: oklch(0.185 0.008 258);
+  --foreground: oklch(0.955 0.003 255);
+
+  --surface: oklch(0.222 0.009 258);
+  --surface-muted: oklch(0.246 0.009 258);
+
+  --muted: oklch(0.262 0.009 258);
+  --muted-foreground: oklch(0.69 0.011 258);
+
+  --border: oklch(0.302 0.01 258);
+  --border-strong: oklch(0.375 0.012 258);
+  --input: oklch(0.302 0.01 258);
+
+  --primary: oklch(0.72 0.106 258);
+  --primary-foreground: oklch(0.185 0.008 258);
+  --primary-subtle: oklch(0.285 0.032 258);
+
+  --ring: oklch(0.72 0.106 258);
+
+  --destructive: oklch(0.63 0.168 25);
+  --destructive-foreground: oklch(0.155 0.008 258);
+  --destructive-subtle: oklch(0.292 0.05 25);
+
+  --success: oklch(0.68 0.105 155);
+  --warning: oklch(0.74 0.12 72);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* One consistent focus treatment, keyboard-only. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--primary-subtle);
+  }
+}

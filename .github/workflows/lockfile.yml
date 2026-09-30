@@ -1,0 +1,36 @@
+name: Refresh lockfile
+
+# There is no Node runtime on the author's machine, so package-lock.json
+# cannot be generated locally. Run this workflow once from the Actions tab
+# after changing dependencies and it will resolve them and commit the result,
+# which is what makes subsequent builds reproducible.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Resolve dependencies
+        run: npm install --package-lock-only --no-audit --no-fund
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "Lockfile already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: refresh package-lock.json"
+          git push
