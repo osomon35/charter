@@ -1,5 +1,6 @@
 "use client";
 
+import { Lock, Unlock } from "lucide-react";
 import {
   FONT_FAMILIES,
   FONT_FAMILY_LABELS,
@@ -16,27 +17,50 @@ const SWATCHES = ["#111827", "#1d4ed8", "#b91c1c", "#047857", "#ffffff"] as cons
 /** Properties panel for the selected element. Empty state when nothing is selected. */
 export function Inspector({
   element,
+  lockedCount,
   onChange,
   onDelete,
   onDuplicate,
+  onUnlockAll,
 }: {
   element: OverlayElement | null;
+  lockedCount: number;
   onChange: (patch: Partial<OverlayElement>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onUnlockAll: () => void;
 }) {
   if (!element) {
     return (
-      <p className="px-4 py-6 text-sm text-muted-foreground">
-        Select an element to change it, or pick a tool above and click the page to place
-        one.
-      </p>
+      <div className="space-y-4 px-4 py-6">
+        <p className="text-sm text-muted-foreground">
+          Select an element to change it, or pick a tool above and click the page to place
+          one.
+        </p>
+        {lockedCount > 0 ? (
+          <Button variant="outline" size="sm" className="w-full" onClick={onUnlockAll}>
+            <Unlock aria-hidden />
+            Unlock all ({lockedCount})
+          </Button>
+        ) : null}
+      </div>
     );
   }
 
+  const locked = element.locked === true;
+
   return (
     <div className="space-y-5 p-4">
-      {element.type === "text" ? (
+      <Button
+        variant={locked ? "default" : "outline"}
+        size="sm"
+        className="w-full"
+        onClick={() => onChange({ locked: !locked })}
+      >
+        {locked ? <Lock aria-hidden /> : <Unlock aria-hidden />}
+        {locked ? "Locked — click to unlock" : "Lock position"}
+      </Button>
+      {element.type === "text" && !locked ? (
         <>
           <div className="space-y-2">
             <Label htmlFor="font">Font</Label>
@@ -109,7 +133,7 @@ export function Inspector({
         </>
       ) : null}
 
-      {element.type !== "image" ? (
+      {element.type !== "image" && !locked ? (
         <div className="space-y-2">
           <Label>{element.type === "whiteout" ? "Fill" : "Colour"}</Label>
           <div className="flex items-center gap-2">
@@ -155,7 +179,13 @@ export function Inspector({
         <Button variant="outline" size="sm" className="flex-1" onClick={onDuplicate}>
           Duplicate
         </Button>
-        <Button variant="outline" size="sm" className="flex-1" onClick={onDelete}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          disabled={locked}
+          onClick={onDelete}
+        >
           Delete
         </Button>
       </div>

@@ -128,3 +128,28 @@ function newestReady(versions: VersionRow[] | null): VersionRow | null {
   if (ready.length === 0) return null;
   return ready.reduce((best, v) => (v.version_no > best.version_no ? v : best));
 }
+
+/**
+ * The version an overlay is edited against: the original upload.
+ *
+ * Deliberately not the latest version. Flattening renders source + overlay into
+ * a new version, so if the overlay were re-based onto its own output every edit
+ * would be applied twice — and, worse, elements would become unreachable once
+ * baked into pixels. Keeping the source fixed is what makes the editing
+ * non-destructive and lets a typo be fixed three versions later.
+ */
+export async function getSourceVersion(contractId: string): Promise<VersionRow | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("contract_versions")
+    .select(
+      "id, version_no, kind, state, page_count, byte_size, sha256, thumbnail_path, original_name, created_at",
+    )
+    .eq("contract_id", contractId)
+    .eq("state", "ready")
+    .order("version_no", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return (data as VersionRow | null) ?? null;
+}

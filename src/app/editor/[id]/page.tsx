@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getContract } from "@/lib/contracts/queries";
+import { getContract, getSourceVersion } from "@/lib/contracts/queries";
 import { overlaySchema } from "@/lib/editor/schema";
 import type { OverlayElement } from "@/lib/editor/types";
 import { Editor } from "@/components/editor/editor";
@@ -44,6 +44,11 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     );
   }
 
+  // Edit against the original upload, never against the latest flattened
+  // output — see getSourceVersion. Falls back to the latest only if a contract
+  // somehow has no readable first version.
+  const source = (await getSourceVersion(id)) ?? contract.latest;
+
   const supabase = await createClient();
   const { data: overlay } = await supabase
     .from("contract_overlays")
@@ -51,9 +56,8 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     .eq("contract_id", id)
     .maybeSingle();
 
-  // A draft saved against an older version would place elements against a page
-  // that has since changed, so it is dropped rather than misapplied.
-  const sameBase = !overlay?.base_version_id || overlay.base_version_id === contract.latest.id;
+  // Only discard a draft that was drawn against a genuinely different page set.
+  const sameBase = !overlay?.base_version_id || overlay.base_version_id === source.id;
   const parsed = overlaySchema.safeParse(overlay?.elements ?? []);
   const initialElements: OverlayElement[] = sameBase && parsed.success ? parsed.data : [];
 
@@ -61,8 +65,10 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
     <Editor
       contractId={contract.id}
       contractTitle={contract.title}
-      versionId={contract.latest.id}
-      pageCount={contract.latest.page_count ?? 1}
+      versionId={source.id}
+      sourceVersionNo={source.version_no}
+      latestVersionNo={contract.latest.version_no}
+      pageCount={source.page_count ?? 1}
       initialElements={initialElements}
     />
   );

@@ -69,12 +69,17 @@ export function Editor({
   contractId,
   contractTitle,
   versionId,
+  sourceVersionNo,
+  latestVersionNo,
   pageCount,
   initialElements,
 }: {
   contractId: string;
   contractTitle: string;
+  /** The original upload. Overlays always render against this, never the latest. */
   versionId: string;
+  sourceVersionNo: number;
+  latestVersionNo: number;
   pageCount: number;
   initialElements: OverlayElement[];
 }) {
@@ -106,6 +111,11 @@ export function Editor({
     () => elements.filter((element) => element.page === page),
     [elements, page],
   );
+  const lockedCount = useMemo(
+    () => elements.filter((element) => element.locked === true).length,
+    [elements],
+  );
+
 
   // --- open the document -------------------------------------------------
   useEffect(() => {
@@ -206,6 +216,10 @@ export function Editor({
     setHistory((current) => commit(current, next));
   }, []);
 
+  const unlockAll = useCallback(() => {
+    commitElements(elements.map((element) => ({ ...element, locked: false })));
+  }, [elements, commitElements]);
+
   const patchSelected = useCallback(
     (patch: Partial<OverlayElement>) => {
       if (!selectedId) return;
@@ -226,7 +240,9 @@ export function Editor({
         replace(
           current,
           current.present.map((element) =>
-            element.id === id && element.type === "text" ? { ...element, text } : element,
+            element.id === id && element.type === "text" && element.locked !== true
+              ? { ...element, text }
+              : element,
           ),
         ),
       );
@@ -236,6 +252,8 @@ export function Editor({
 
   const deleteSelected = useCallback(() => {
     if (!selectedId) return;
+    const target = elements.find((element) => element.id === selectedId);
+    if (!target || target.locked === true) return;
     commitElements(elements.filter((element) => element.id !== selectedId));
     setSelectedId(null);
   }, [selectedId, elements, commitElements]);
@@ -347,7 +365,7 @@ export function Editor({
   // --- drag and resize ----------------------------------------------------
   function startGesture(event: React.PointerEvent, id: string, kind: DragKind) {
     const target = elements.find((element) => element.id === id);
-    if (!target || !pageRef.current) return;
+    if (!target || target.locked === true || !pageRef.current) return;
 
     event.preventDefault();
     const rect = pageRef.current.getBoundingClientRect();
@@ -449,7 +467,10 @@ export function Editor({
       }
 
       // Arrow nudges: 1pt normally, 10 with shift.
-      if (selectedId && event.key.startsWith("Arrow")) {
+      const selectedLocked =
+        elements.find((element) => element.id === selectedId)?.locked === true;
+
+      if (selectedId && !selectedLocked && event.key.startsWith("Arrow")) {
         event.preventDefault();
         const step = (event.shiftKey ? 10 : 1) / pagePoints.width;
         const stepY = (event.shiftKey ? 10 : 1) / pagePoints.height;
@@ -518,9 +539,16 @@ export function Editor({
           <span className="hidden sm:inline">Back</span>
         </Link>
 
-        <span className="hidden min-w-0 truncate text-sm font-medium md:block">
-          {contractTitle}
-        </span>
+        <div className="hidden min-w-0 md:block">
+          <span className="block truncate text-sm font-medium leading-tight">
+            {contractTitle}
+          </span>
+          <span className="block truncate text-[11px] leading-tight text-muted-foreground">
+            {latestVersionNo > sourceVersionNo
+              ? `Editing on v${sourceVersionNo} · latest is v${latestVersionNo} · flatten makes v${latestVersionNo + 1}`
+              : `Editing on v${sourceVersionNo} · flatten makes v${sourceVersionNo + 1}`}
+          </span>
+        </div>
 
         <div className="mx-auto flex items-center gap-1">
           {TOOLS.map(({ tool: value, label, Icon }) => (
@@ -645,9 +673,11 @@ export function Editor({
         <aside className="hidden w-72 shrink-0 overflow-y-auto border-l border-border bg-surface lg:block">
           <Inspector
             element={selected}
+            lockedCount={lockedCount}
             onChange={patchSelected}
             onDelete={deleteSelected}
             onDuplicate={duplicateSelected}
+            onUnlockAll={unlockAll}
           />
         </aside>
       </div>

@@ -40,6 +40,12 @@ export type ElementBase = {
   y: number;
   w: number;
   h: number;
+  /**
+   * Locked elements cannot be dragged, resized, retyped or deleted — a guard
+   * against nudging something already positioned, not a permission. Always
+   * reversible from the inspector.
+   */
+  locked?: boolean;
 };
 
 export type TextElement = ElementBase & {
@@ -101,7 +107,7 @@ export function newElement(
   extras?: Partial<ImageElement>,
 ): OverlayElement {
   const id = crypto.randomUUID();
-  const base = { id, page, x: at.x, y: at.y };
+  const base = { id, page, x: at.x, y: at.y, locked: false };
 
   switch (type) {
     case "text":

@@ -21,6 +21,7 @@ const base = {
   y: normalized,
   w: z.number().min(0.001).max(2),
   h: z.number().min(0.001).max(2),
+  locked: z.boolean().optional(),
 };
 
 export const elementSchema = z.discriminatedUnion("type", [

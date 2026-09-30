@@ -144,10 +144,10 @@ export type FlattenResult =
 /**
  * Writes a new version with the overlay baked in.
  *
- * The base version is read, never written. The output becomes version N+1 with
- * kind 'edited', gets its own SHA-256, and the draft is cleared — so the editor
- * reopens on top of the flattened result rather than re-applying the same
- * elements twice.
+ * baseVersionId is the contract's original upload, not its latest version. It is
+ * read, never written, and the output becomes version N+1 with kind 'edited' and
+ * its own SHA-256. Versions are append-only: a corrected v4 does not erase the
+ * v3 that had the typo, which is what keeps the hash chain worth anything.
  */
 export async function flattenToNewVersion(input: {
   contractId: string;
@@ -249,11 +249,11 @@ export async function flattenToNewVersion(input: {
     return { ok: false, error: "Could not record the new version." };
   }
 
-  // The draft has been applied; leaving it would double up on the next edit.
-  await supabase
-    .from("contract_overlays")
-    .update({ elements: [], base_version_id: version.id })
-    .eq("contract_id", input.contractId);
+  // The draft is deliberately kept, and deliberately NOT re-based onto the
+  // version just produced. Overlays always render against the original, so the
+  // elements stay editable — fixing a typo three versions later means editing
+  // the same text box and flattening again, rather than being stuck with pixels.
+  // Re-basing onto the output would also apply every element twice.
 
   revalidatePath(`/contracts/${input.contractId}`);
   revalidatePath("/contracts");

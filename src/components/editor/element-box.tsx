@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Lock } from "lucide-react";
 import {
   FONT_FAMILY_CSS,
   type OverlayElement,
@@ -46,12 +47,15 @@ export function ElementBox({
   onTextChange?: (text: string) => void;
 }) {
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const locked = element.locked === true;
 
   return (
     <div
       role="presentation"
       onPointerDown={(event) => {
+        // Still selectable when locked — that is how it gets unlocked.
         onSelect();
+        if (locked) return;
         // Typing inside a selected text box must not start a drag.
         const target = event.target as HTMLElement;
         if (target.tagName === "TEXTAREA") return;
@@ -64,8 +68,13 @@ export function ElementBox({
         height: `${element.h * 100}%`,
       }}
       className={cn(
-        "absolute cursor-move select-none",
-        selected ? "outline outline-2 outline-primary" : "outline outline-1 outline-primary/25",
+        "absolute select-none",
+        locked ? "cursor-default" : "cursor-move",
+        selected
+          ? locked
+            ? "outline outline-2 outline-muted-foreground"
+            : "outline outline-2 outline-primary"
+          : "outline outline-1 outline-primary/25",
       )}
     >
       {element.type === "whiteout" ? (
@@ -101,6 +110,7 @@ export function ElementBox({
           ref={textRef}
           value={element.text}
           onChange={(event) => onTextChange?.(event.target.value)}
+          readOnly={locked}
           spellCheck={false}
           className="h-full w-full resize-none border-0 bg-transparent p-0 outline-none"
           style={{
@@ -113,12 +123,22 @@ export function ElementBox({
             fontStyle: element.italic ? "italic" : "normal",
             color: element.color,
             textAlign: element.align,
-            cursor: selected ? "text" : "move",
+            cursor: locked ? "default" : selected ? "text" : "move",
           }}
         />
       ) : null}
 
-      {selected
+      {selected && locked ? (
+        <span
+          aria-hidden
+          title="Locked"
+          className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full border border-border bg-surface"
+        >
+          <Lock className="size-2.5 text-muted-foreground" />
+        </span>
+      ) : null}
+
+      {selected && !locked
         ? HANDLES.map((handle) => (
             <span
               key={handle.kind}
