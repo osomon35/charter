@@ -128,18 +128,23 @@ create table if not exists public.contracts (
   deleted_at        timestamptz,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now(),
-  created_by        uuid references auth.users (id) on delete set null,
+  created_by        uuid references auth.users (id) on delete set null
+);
 
-  -- Full-text search over the fields that live on this row. Tags are joined
-  -- separately, so Phase 6 searches this column and the tag names as a union.
-  search_vector tsvector generated always as (
+-- Added separately rather than inline: `create table if not exists` silently
+-- adopts an existing table of the same name, and then an inline column would be
+-- missing without any error. This form fixes up a table that is already there.
+-- Full-text search over this row's own fields; tags are joined separately, so
+-- Phase 6 searches this column and the tag names as a union.
+alter table public.contracts
+  add column if not exists search_vector tsvector
+  generated always as (
     to_tsvector('english',
       coalesce(title, '') || ' ' ||
       coalesce(counterparty_name, '') || ' ' ||
       coalesce(notes, '')
     )
-  ) stored
-);
+  ) stored;
 
 create index if not exists contracts_search_idx  on public.contracts using gin (search_vector);
 create index if not exists contracts_status_idx  on public.contracts (status);
