@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, FileText, PenLine } from "lucide-react";
+import { ArrowLeft, Download, FileText, PenLine, Send } from "lucide-react";
 import { requireOwner } from "@/lib/auth";
 import { getContract, listVersions } from "@/lib/contracts/queries";
+import { listAudit, listEnvelopes } from "@/lib/envelopes/queries";
+import { EnvelopePanel } from "@/components/contracts/envelope-panel";
+import { AuditTrail } from "@/components/contracts/audit-trail";
 import { formatBytes } from "@/lib/contracts/types";
 import { MetadataForm } from "@/components/contracts/metadata-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +26,11 @@ export default async function ContractPage({
   const contract = await getContract(id);
   if (!contract) notFound();
 
-  const versions = await listVersions(id);
+  const [versions, envelopes, audit] = await Promise.all([
+    listVersions(id),
+    listEnvelopes(id),
+    listAudit(id),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -56,9 +63,16 @@ export default async function ContractPage({
               <Download aria-hidden />
               Open PDF
             </a>
-            <Link href={`/editor/${contract.id}`} className={buttonVariants({ size: "sm" })}>
+            <Link
+              href={`/editor/${contract.id}`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
               <PenLine aria-hidden />
-              Edit &amp; sign
+              Edit
+            </Link>
+            <Link href={`/send/${contract.id}`} className={buttonVariants({ size: "sm" })}>
+              <Send aria-hidden />
+              Send for signature
             </Link>
           </div>
         ) : null}
@@ -73,6 +87,19 @@ export default async function ContractPage({
             <MetadataForm contract={contract} />
           </CardContent>
         </Card>
+
+        {envelopes.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Signature requests</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-8">
+              {envelopes.map((envelope) => (
+                <EnvelopePanel key={envelope.id} envelope={envelope} />
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>
@@ -113,12 +140,21 @@ export default async function ContractPage({
             </ul>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Audit trail</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <AuditTrail events={audit} />
+          </CardContent>
+        </Card>
       </div>
 
       <p className="mt-8 text-xs leading-relaxed text-muted-foreground">
-        The original upload is never modified. Editing and signing, in the next phases,
-        append a new version and leave version 1 byte-for-byte as it arrived — which is
-        what makes its SHA-256 worth recording.
+        The original upload is never modified. Every edit and every completed signature
+        appends a new version and leaves version 1 byte-for-byte as it arrived — which is
+        what makes its SHA-256, and every hash in the trail above, worth recording.
       </p>
     </div>
   );

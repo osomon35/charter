@@ -11,7 +11,15 @@ import { updateSession } from "@/lib/supabase/middleware";
  */
 
 /** Reachable without a session. Everything else requires one. */
-const PUBLIC_PREFIXES = ["/login", "/auth", "/sign", "/legal"] as const;
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/auth",
+  "/sign",
+  // The signer's own document fetch. Authorized by its hashed token, not by a
+  // session — see resolveSignerToken.
+  "/api/sign",
+  "/legal",
+] as const;
 
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some(
