@@ -27,6 +27,12 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  experimental: {
+    // Signature PNGs are posted through a server action so the bytes can be
+    // checked before they are stored. Trimmed, they are tens of kilobytes; the
+    // default 1 MB limit leaves no margin for an uploaded one.
+    serverActions: { bodySizeLimit: "2mb" },
+  },
   webpack(config) {
     // pdfjs-dist declares `canvas` as an optional dependency for its Node
     // build. Nothing in the browser entry uses it, but webpack still tries to

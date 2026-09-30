@@ -44,9 +44,12 @@ import {
 } from "@/lib/editor/history";
 import { clamp01, snapPosition, type Guide } from "@/lib/editor/snapping";
 import { STORAGE_BUCKET } from "@/lib/contracts/types";
+import { placeSignatureOnContract } from "@/lib/signatures/actions";
+import type { SignatureRecord } from "@/lib/signatures/types";
 import { PageCanvas } from "@/components/editor/page-canvas";
 import { ElementBox, type DragKind } from "@/components/editor/element-box";
 import { Inspector } from "@/components/editor/inspector";
+import { SignaturePicker } from "@/components/editor/signature-picker";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -310,6 +313,37 @@ export function Editor({
     }
   }
 
+  async function placeSignature(signature: SignatureRecord) {
+    setBusy(true);
+    setStatus("Placing signature…");
+    try {
+      // The signature is copied into this contract's own asset prefix, so the
+      // document keeps working if the profile signature is later deleted.
+      const placed = await placeSignatureOnContract({
+        contractId,
+        signatureId: signature.id,
+      });
+
+      if (!placed.ok) {
+        setStatus(placed.error);
+        return;
+      }
+
+      const created = newElement("image", page, { x: 0.12, y: 0.62 }, {
+        assetPath: placed.assetPath,
+        naturalWidth: placed.width,
+        naturalHeight: placed.height,
+      });
+
+      commitElements([...elements, created]);
+      setSelectedId(created.id);
+      setTool(null);
+      setStatus(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // --- drag and resize ----------------------------------------------------
   function startGesture(event: React.PointerEvent, id: string, kind: DragKind) {
     const target = elements.find((element) => element.id === id);
@@ -507,6 +541,8 @@ export function Editor({
               <span className="hidden lg:inline">{label}</span>
             </button>
           ))}
+
+          <SignaturePicker onPick={placeSignature} disabled={busy} />
 
           <span className="mx-1 h-5 w-px bg-border" />
 

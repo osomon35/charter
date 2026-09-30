@@ -128,3 +128,9 @@
     background-color: var(--primary-subtle);
   }
 }
+
+/* Handwriting face for typed signatures. Declared as a utility so client
+   components can name the class without importing next/font themselves. */
+.font-caveat {
+  font-family: var(--font-caveat), cursive;
+}
