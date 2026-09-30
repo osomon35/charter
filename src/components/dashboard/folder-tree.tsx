@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Folder, FolderOpen, Inbox, Pencil, Plus, Trash2 } from "lucide-react";
 import {
@@ -14,7 +14,6 @@ import type { FolderNode } from "@/lib/contracts/row-types";
 import type { Filters } from "@/lib/contracts/filters";
 import { useFilters } from "@/components/dashboard/use-filters";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -283,8 +282,15 @@ function CreateField({
   const router = useRouter();
   const [name, setName] = useState("");
   const [pending, startTransition] = useTransition();
+  // Enter submits and then the field loses focus, which fires onBlur and submits
+  // a second time — two identical folders. A ref, not state, because both events
+  // land in the same tick and a state update would not be visible to the second.
+  const submitted = useRef(false);
 
   function submit() {
+    if (submitted.current) return;
+    submitted.current = true;
+
     if (!name.trim()) {
       onDone();
       return;
@@ -325,8 +331,13 @@ function RenameField({
   const router = useRouter();
   const [name, setName] = useState(initial);
   const [pending, startTransition] = useTransition();
+  // Same double-submit as CreateField: Enter, then the blur behind it.
+  const submitted = useRef(false);
 
   function submit() {
+    if (submitted.current) return;
+    submitted.current = true;
+
     if (!name.trim() || name === initial) {
       onDone();
       return;

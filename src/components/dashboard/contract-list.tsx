@@ -3,16 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Archive,
-  ArchiveRestore,
-  Clock,
-  FileText,
-  PenLine,
-  Trash2,
-  Undo2,
-  X,
-} from "lucide-react";
+import { Archive, ArchiveRestore, Clock, FileText, Trash2, Undo2, X } from "lucide-react";
 import {
   bulkArchive,
   bulkDelete,
@@ -24,7 +15,6 @@ import {
   STATUS_CLASSES,
   STATUS_LABELS,
   TAG_COLOR_CLASSES,
-  formatBytes,
 } from "@/lib/contracts/types";
 import type {
   DashboardContract,
@@ -33,6 +23,7 @@ import type {
 } from "@/lib/contracts/row-types";
 import type { Filters } from "@/lib/contracts/filters";
 import { flattenTreeClient } from "@/components/dashboard/tree";
+import { ContractTable } from "@/components/dashboard/contract-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -125,114 +116,15 @@ export function ContractList({
           ))}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-muted text-left">
-                <th className="w-9 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={() =>
-                      setSelected(
-                        allSelected ? new Set() : new Set(contracts.map((c) => c.id)),
-                      )
-                    }
-                    aria-label="Select all"
-                    className="size-3.5 accent-[color:var(--primary)]"
-                  />
-                </th>
-                <th className="px-2 py-2 text-xs font-medium text-muted-foreground">Title</th>
-                <th className="px-2 py-2 text-xs font-medium text-muted-foreground">
-                  Counterparty
-                </th>
-                <th className="px-2 py-2 text-xs font-medium text-muted-foreground">Status</th>
-                <th className="px-2 py-2 text-xs font-medium text-muted-foreground">Tags</th>
-                <th className="px-2 py-2 text-xs font-medium text-muted-foreground">Updated</th>
-                <th className="w-20 px-2 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {contracts.map((contract) => (
-                <tr
-                  key={contract.id}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData(
-                      "application/x-charter-contracts",
-                      dragPayload(contract.id),
-                    );
-                    event.dataTransfer.effectAllowed = "move";
-                  }}
-                  className={cn(
-                    "border-b border-border last:border-0 transition-colors",
-                    selected.has(contract.id) ? "bg-primary-subtle" : "hover:bg-surface-muted",
-                  )}
-                >
-                  <td className="px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(contract.id)}
-                      onChange={() => toggle(contract.id)}
-                      aria-label={`Select ${contract.title}`}
-                      className="size-3.5 accent-[color:var(--primary)]"
-                    />
-                  </td>
-                  <td className="max-w-0 px-2 py-2.5">
-                    <Link
-                      href={`/contracts/${contract.id}`}
-                      className="block truncate font-medium hover:underline"
-                    >
-                      {contract.title}
-                    </Link>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {contract.latest
-                        ? `${contract.latest.page_count ?? "?"}p · ${formatBytes(contract.latest.byte_size)}`
-                        : "No file"}
-                    </span>
-                  </td>
-                  <td className="max-w-0 px-2 py-2.5">
-                    <span className="block truncate text-muted-foreground">
-                      {contract.counterparty_name ?? "—"}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2.5">
-                    <div className="flex flex-col items-start gap-1">
-                      <Badge className={STATUS_CLASSES[contract.status]}>
-                        {STATUS_LABELS[contract.status]}
-                      </Badge>
-                      <SigningFlag contract={contract} />
-                    </div>
-                  </td>
-                  <td className="px-2 py-2.5">
-                    <div className="flex flex-wrap gap-1">
-                      {contract.tags.map((tag) => (
-                        <Badge key={tag.id} className={TAG_COLOR_CLASSES[tag.color]}>
-                          {tag.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-xs tabular-nums text-muted-foreground">
-                    {new Date(contract.updated_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-2 py-2.5">
-                    {contract.latest ? (
-                      <Link
-                        href={`/editor/${contract.id}`}
-                        aria-label={`Edit ${contract.title}`}
-                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        <PenLine className="size-3" aria-hidden />
-                        Edit
-                      </Link>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ContractTable
+          contracts={contracts}
+          selected={selected}
+          onToggle={toggle}
+          onToggleAll={() =>
+            setSelected(allSelected ? new Set() : new Set(contracts.map((c) => c.id)))
+          }
+          dragPayload={dragPayload}
+        />
       )}
     </div>
   );
@@ -286,9 +178,12 @@ function CardRow({
         selected ? "border-primary ring-1 ring-primary" : "border-border hover:border-border-strong",
       )}
     >
+      {/* draggable={false} matters: an anchor is natively draggable and would
+          start its own drag carrying the URL, so the card's drag never fired. */}
       <Link
         href={`/contracts/${contract.id}`}
         aria-label={contract.title}
+        draggable={false}
         className="absolute inset-0 z-10 rounded-lg"
       />
 
