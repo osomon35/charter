@@ -4,6 +4,8 @@
 -- Design notes:
 --   * Deny by default. Every table gets RLS enabled with no permissive
 --     policy for anon, and owner access is gated on public.is_owner().
+--     RLS is enabled but not FORCEd: the table owner must stay exempt so the
+--     SECURITY DEFINER functions below can write rows that no API role may.
 --   * The allowlist is enforced in three independent places: a BEFORE INSERT
 --     trigger on auth.users (so a non-allowlisted address can never become a
 --     user, even with a valid magic link), public.is_owner() inside every RLS
@@ -24,7 +26,6 @@ comment on table public.owner_allowlist is
   'Addresses permitted to hold a Charter account. Authority for is_owner().';
 
 alter table public.owner_allowlist enable row level security;
-alter table public.owner_allowlist force row level security;
 
 -- >>> EDIT ME: seed your own address(es) here before running.
 insert into public.owner_allowlist (email, note)
@@ -102,7 +103,6 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles enable row level security;
-alter table public.profiles force row level security;
 
 drop policy if exists "owners read own profile" on public.profiles;
 create policy "owners read own profile"
@@ -170,7 +170,6 @@ create table if not exists public.rate_limits (
 );
 
 alter table public.rate_limits enable row level security;
-alter table public.rate_limits force row level security;
 -- Deliberately no policies: reachable only via the service role, through
 -- consume_rate_limit() below.
 
