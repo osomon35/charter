@@ -17,9 +17,9 @@ export type Owner = {
  * so it is used here only to refresh the session cookie and bounce obvious
  * anonymous traffic. Real checks happen here and in RLS.
  *
- * Three things must hold: a revalidated Supabase user, an allowlisted address
- * in the app layer, and a profile row that RLS agreed to return — which it
- * only does when public.is_owner() passes in the database.
+ * Two things must hold: a revalidated Supabase user, and public.is_owner()
+ * returning true when asked under that user's own JWT — the same predicate
+ * every RLS policy is built on.
  */
 export async function requireOwner(): Promise<Owner> {
   const supabase = await createClient();
@@ -43,11 +43,26 @@ export async function requireOwner(): Promise<Owner> {
     redirect("/login?error=not_permitted");
   }
 
+  // The profile row is created here, on first sign-in, rather than by a
+  // trigger on auth.users — an exception in such a trigger surfaces only as
+  // Supabase's opaque "Database error creating new user" and blocks the whole
+  // signup. Doing it here keeps the failure visible and non-fatal.
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, email, full_name")
     .eq("id", user.id)
     .maybeSingle();
+
+  if (!profile) {
+    const { error: insertError } = await supabase
+      .from("profiles")
+      .insert({ id: user.id, email: user.email.toLowerCase() });
+
+    // Not fatal: a missing profile costs us the display name, nothing more.
+    if (insertError) {
+      console.error("profile_bootstrap_failed", { message: insertError.message });
+    }
+  }
 
   return {
     id: user.id,
