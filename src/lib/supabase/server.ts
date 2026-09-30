@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { publicEnv } from "@/lib/env";
+import type { CookieToSet } from "@/lib/supabase/cookies";
 
 /**
  * Request-scoped client that carries the user's session and is therefore
@@ -14,7 +15,7 @@ export async function createClient() {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: CookieToSet[]) {
         try {
           for (const { name, value, options } of cookiesToSet) {
             cookieStore.set(name, value, options);

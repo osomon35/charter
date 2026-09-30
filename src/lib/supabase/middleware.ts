@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { publicEnv } from "@/lib/env";
+import type { CookieToSet } from "@/lib/supabase/cookies";
 
 /**
  * Refreshes the Supabase session cookie and reports who the request belongs
@@ -14,7 +15,7 @@ export async function updateSession(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: CookieToSet[]) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
