@@ -26,11 +26,24 @@ export function EnvelopePanel({ envelope }: { envelope: EnvelopeView }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState<string | null>(null);
   const active = envelope.status === "sent" || envelope.status === "partially_signed";
 
   return (
     <div className="space-y-3">
       {message ? <Alert tone="error">{message}</Alert> : null}
+
+      {revealed ? (
+        <Alert>
+          <p className="font-medium">New signing link</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Shown because REVEAL_SIGNING_LINKS is enabled. It replaces the previous link.
+          </p>
+          <code className="mt-2 block truncate rounded bg-muted px-2 py-1 font-mono text-[11px]">
+            {revealed}
+          </code>
+        </Alert>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Badge className="border-border bg-muted text-muted-foreground">
@@ -90,6 +103,7 @@ export function EnvelopePanel({ envelope }: { envelope: EnvelopeView }) {
                     startTransition(async () => {
                       const result = await nudgeRecipient(recipient.id);
                       setMessage(result.ok ? null : result.error);
+                      setRevealed(result.ok ? (result.url ?? null) : null);
                       router.refresh();
                     })
                   }

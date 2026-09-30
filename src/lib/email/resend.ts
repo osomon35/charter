@@ -1,5 +1,7 @@
 import "server-only";
 
+import { resolveFrom, type Sender } from "@/lib/email/sender";
+
 /**
  * Minimal Resend client over their REST API.
  *
@@ -26,11 +28,15 @@ export async function sendEmail(input: {
   subject: string;
   html: string;
   text: string;
+  /** Whose name the mail carries. See resolveFrom for what is actually possible. */
+  sender?: Sender | null;
   replyTo?: string;
   attachments?: Attachment[];
 }): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.EMAIL_FROM?.trim();
+  const resolved = resolveFrom(input.sender ?? null);
+  const from = resolved.from;
+  const replyTo = input.replyTo ?? resolved.replyTo;
 
   if (!apiKey || !from) {
     return {
@@ -53,7 +59,7 @@ export async function sendEmail(input: {
         subject: input.subject,
         html: input.html,
         text: input.text,
-        ...(input.replyTo ? { reply_to: input.replyTo } : {}),
+        ...(replyTo ? { reply_to: replyTo } : {}),
         ...(input.attachments?.length ? { attachments: input.attachments } : {}),
       }),
     });

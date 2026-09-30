@@ -4,6 +4,7 @@ import { listSignatures } from "@/lib/signatures/actions";
 import { PageHeader } from "@/components/shell/page-header";
 import { SignatureCreator } from "@/components/signatures/signature-creator";
 import { SignatureList } from "@/components/signatures/signature-list";
+import { DisplayNameForm } from "@/components/settings/display-name-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -49,18 +50,16 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle>Account</CardTitle>
             <CardDescription>
-              Access is granted by address. To add or remove someone, update the
-              owner_allowlist table and the OWNER_ALLOWLIST variable together.
+              Your name appears in the From line of signing requests and on the certificate
+              of completion. Access itself is granted by address — to add or remove someone,
+              update the owner_allowlist table and the OWNER_ALLOWLIST variable together.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between gap-4 border-t border-border pt-3 text-sm">
+          <CardContent className="space-y-5">
+            <DisplayNameForm fullName={owner.fullName} />
+            <div className="flex justify-between gap-4 border-t border-border pt-4 text-sm">
               <span className="text-muted-foreground">Email</span>
               <span className="truncate font-medium">{owner.email}</span>
-            </div>
-            <div className="flex justify-between gap-4 border-t border-border pt-3 text-sm">
-              <span className="text-muted-foreground">Name</span>
-              <span className="truncate font-medium">{owner.fullName ?? "—"}</span>
             </div>
           </CardContent>
         </Card>

@@ -14,6 +14,7 @@ import { resolveSignerToken, nextSequentialRecipient } from "@/lib/envelopes/sig
 import { generateToken, hashToken } from "@/lib/envelopes/tokens";
 import { notifyRecipient } from "@/lib/envelopes/send-actions";
 import { sendEmail } from "@/lib/email/resend";
+import { ownerSender } from "@/lib/email/sender";
 import { completedNotice, declinedNotice } from "@/lib/email/templates";
 import type { FieldType } from "@/lib/envelopes/types";
 
@@ -352,7 +353,13 @@ export async function declineToSign(input: {
       recipientName: recipient.name,
       reason,
     });
-    await sendEmail({ to: [owner], subject: mail.subject, html: mail.html, text: mail.text });
+    await sendEmail({
+      to: [owner],
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+      sender: await ownerSender(),
+    });
   }
 
   return { ok: true };
@@ -616,6 +623,7 @@ export async function completeEnvelope(envelopeId: string): Promise<void> {
     subject: mail.subject,
     html: mail.html,
     text: mail.text,
+    sender: await ownerSender(),
     attachments: [
       {
         filename: `${safeFilename(title)}-signed.pdf`,

@@ -11,6 +11,7 @@ import { recordAudit } from "@/lib/envelopes/audit";
 import { FIELD_TYPES, ROUTINGS } from "@/lib/envelopes/types";
 import { DEFAULT_EXPIRY_DAYS, expiryFromNow, generateToken, hashToken } from "@/lib/envelopes/tokens";
 import { sendEmail } from "@/lib/email/resend";
+import { ownerSender } from "@/lib/email/sender";
 import { signatureRequest } from "@/lib/email/templates";
 import { flattenToNewVersion } from "@/lib/editor/actions";
 import { overlaySchema } from "@/lib/editor/schema";
@@ -44,7 +45,19 @@ const sendSchema = z.object({
 });
 
 export type SendResult =
-  | { ok: true; envelopeId: string; notified: number; warnings: string[] }
+  | {
+      ok: true;
+      envelopeId: string;
+      notified: number;
+      warnings: string[];
+      /**
+       * Only populated when REVEAL_SIGNING_LINKS is "true" — a development
+       * escape hatch for testing before a sending domain has been verified.
+       * These are live credentials: anyone holding one can sign as that
+       * recipient, so the flag must not be set in production.
+       */
+      links: { email: string; url: string }[];
+    }
   | { ok: false; error: string };
 
 /**
@@ -187,6 +200,8 @@ export async function createAndSendEnvelope(input: unknown): Promise<SendResult>
   const toNotify = routing === "sequential" ? recipientIds.slice(0, 1) : recipientIds;
 
   const warnings: string[] = [];
+  const links: { email: string; url: string }[] = [];
+  const reveal = process.env.REVEAL_SIGNING_LINKS === "true";
   let notified = 0;
 
   for (const recipientId of toNotify) {
@@ -207,6 +222,10 @@ export async function createAndSendEnvelope(input: unknown): Promise<SendResult>
 
     if (result.ok) notified += 1;
     else warnings.push(`${recipient.email}: ${result.error}`);
+
+    if (reveal) {
+      links.push({ email: recipient.email, url: `${publicEnv.appUrl}/sign/${token}` });
+    }
   }
 
   await recordAudit({
@@ -229,7 +248,7 @@ export async function createAndSendEnvelope(input: unknown): Promise<SendResult>
   revalidatePath("/contracts");
   revalidatePath("/dashboard");
 
-  return { ok: true, envelopeId: envelope.id, notified, warnings };
+  return { ok: true, envelopeId: envelope.id, notified, warnings, links };
 }
 
 /**
@@ -298,6 +317,8 @@ export async function notifyRecipient(input: {
     subject: mail.subject,
     html: mail.html,
     text: mail.text,
+    // Recipients should see a person, not the software.
+    sender: await ownerSender(),
   });
 
   if (!sent.ok) return { ok: false, error: sent.error };
@@ -315,7 +336,7 @@ export async function notifyRecipient(input: {
 /** Re-sends the link to a pending recipient. A new token is not minted. */
 export async function nudgeRecipient(
   recipientId: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; url?: string } | { ok: false; error: string }> {
   const owner = await requireOwner();
   if (!z.string().uuid().safeParse(recipientId).success) {
     return { ok: false, error: "Invalid request." };
@@ -370,7 +391,14 @@ export async function nudgeRecipient(
     expiresAt: envelope.expires_at,
   });
 
-  if (!result.ok) return result;
+  if (!result.ok) {
+    // The new token is already stored, so surface it when revealing is on —
+    // otherwise a failed nudge would leave an unreachable link.
+    if (process.env.REVEAL_SIGNING_LINKS === "true") {
+      console.warn("nudge_email_failed_link_revealed", { recipientId });
+    }
+    return result;
+  }
 
   await recordAudit({
     contractId: envelope.contract_id,
@@ -382,7 +410,12 @@ export async function nudgeRecipient(
   });
 
   revalidatePath(`/contracts/${envelope.contract_id}`);
-  return { ok: true };
+  return {
+    ok: true,
+    ...(process.env.REVEAL_SIGNING_LINKS === "true"
+      ? { url: `${publicEnv.appUrl}/sign/${token}` }
+      : {}),
+  };
 }
 
 /** Cancels an envelope. Existing links stop working immediately. */

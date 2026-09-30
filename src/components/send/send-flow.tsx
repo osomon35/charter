@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
+import { RevealedLinks } from "@/components/send/revealed-links";
 import { cn } from "@/lib/utils";
 
 type Step = "recipients" | "fields" | "review";
@@ -70,6 +71,7 @@ export function SendFlow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [links, setLinks] = useState<{ email: string; url: string }[]>([]);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -240,10 +242,11 @@ export function SendFlow({
       return;
     }
 
-    if (result.warnings.length > 0) {
-      // The envelope exists and the links are valid; only delivery failed. Say
-      // so plainly rather than implying the whole send failed.
+    // Stay on the page when there is something the owner still needs to see:
+    // failed deliveries, or revealed links they have to copy.
+    if (result.warnings.length > 0 || result.links.length > 0) {
       setWarnings(result.warnings);
+      setLinks(result.links);
       return;
     }
 
@@ -308,6 +311,20 @@ export function SendFlow({
         {error ? (
           <div className="mx-auto max-w-2xl px-6 pt-6">
             <Alert tone="error">{error}</Alert>
+          </div>
+        ) : null}
+
+        {links.length > 0 ? (
+          <div className="mx-auto max-w-2xl px-6 pt-6">
+            <RevealedLinks links={links} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => router.push(`/contracts/${contractId}`)}
+            >
+              Done — go to contract
+            </Button>
           </div>
         ) : null}
 
