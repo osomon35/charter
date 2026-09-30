@@ -39,7 +39,7 @@ address:
 
 ```sql
 insert into public.owner_allowlist (email, note)
-values ('you@example.com', 'owner')
+values ('joao@cobalto.cc', 'owner')
 on conflict (email) do nothing;
 ```
 

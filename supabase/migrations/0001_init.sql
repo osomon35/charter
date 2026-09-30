@@ -34,7 +34,7 @@ alter table public.owner_allowlist enable row level security;
 
 -- >>> EDIT ME: this must match the address you sign in with, lower-cased.
 insert into public.owner_allowlist (email, note)
-values ('joao@frameforge.co', 'owner')
+values ('joao@cobalto.cc', 'owner')
 on conflict (email) do nothing;
 
 -- ---------------------------------------------------------------------------
