@@ -23,6 +23,7 @@ import type {
 } from "@/lib/contracts/row-types";
 import type { Filters } from "@/lib/contracts/filters";
 import { flattenTreeClient } from "@/components/dashboard/tree";
+import { startContractDrag } from "@/components/dashboard/dnd";
 import { ContractTable } from "@/components/dashboard/contract-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -169,12 +170,9 @@ function CardRow({
   return (
     <div
       draggable
-      onDragStart={(event) => {
-        event.dataTransfer.setData("application/x-charter-contracts", dragPayload);
-        event.dataTransfer.effectAllowed = "move";
-      }}
+      onDragStart={(event) => startContractDrag(event, dragPayload)}
       className={cn(
-        "group relative rounded-lg border bg-surface transition-colors",
+        "group relative cursor-grab rounded-lg border bg-surface transition-colors",
         selected ? "border-primary ring-1 ring-primary" : "border-border hover:border-border-strong",
       )}
     >

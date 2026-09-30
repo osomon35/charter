@@ -15,6 +15,10 @@ import {
   useColumnConfig,
   type ColumnKey,
 } from "@/components/dashboard/columns";
+import {
+  COLUMN_DRAG_TYPE,
+  startContractDrag,
+} from "@/components/dashboard/dnd";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +49,7 @@ export function ContractTable({
 
   const allSelected = contracts.length > 0 && selected.size === contracts.length;
   const totalWidth =
-    config.order.reduce((sum, key) => sum + config.widths[key], 0) + 36 + 80;
+    config.order.reduce((sum, key) => sum + config.widths[key], 0) + 52 + 80;
 
   function startResize(event: React.PointerEvent, key: ColumnKey) {
     // stopPropagation, or the header's own drag starts and the resize never runs.
@@ -78,7 +82,7 @@ export function ContractTable({
           style={{ tableLayout: "fixed", width: Math.max(totalWidth, 640) }}
         >
           <colgroup>
-            <col style={{ width: 36 }} />
+            <col style={{ width: 52 }} />
             {config.order.map((key) => (
               <col key={key} style={{ width: config.widths[key] }} />
             ))}
@@ -103,7 +107,10 @@ export function ContractTable({
                   scope="col"
                   draggable
                   onDragStart={(event) => {
-                    event.dataTransfer.setData("application/x-charter-column", key);
+                    event.dataTransfer.setData(COLUMN_DRAG_TYPE, key);
+                    // A standard type as well, or the drag does not start in
+                    // every browser. Never read.
+                    event.dataTransfer.setData("text/plain", key);
                     event.dataTransfer.effectAllowed = "move";
                     setDraggingColumn(key);
                   }}
@@ -111,20 +118,13 @@ export function ContractTable({
                     setDraggingColumn(null);
                     setDropColumn(null);
                   }}
-                  onDragOver={(event) => {
-                    // Only react to a column drag, so dragging a contract row
-                    // across the header does nothing.
-                    if (!event.dataTransfer.types.includes("application/x-charter-column")) {
-                      return;
-                    }
-                    event.preventDefault();
-                    setDropColumn(key);
-                  }}
+                  onDragEnter={(event) => acceptColumnDrag(event) && setDropColumn(key)}
+                  onDragOver={(event) => acceptColumnDrag(event) && setDropColumn(key)}
                   onDragLeave={() =>
                     setDropColumn((current) => (current === key ? null : current))
                   }
                   onDrop={(event) => {
-                    const from = event.dataTransfer.getData("application/x-charter-column");
+                    const from = event.dataTransfer.getData(COLUMN_DRAG_TYPE);
                     if (!from) return;
                     event.preventDefault();
                     move(from as ColumnKey, key);
@@ -169,26 +169,26 @@ export function ContractTable({
               <tr
                 key={contract.id}
                 draggable
-                onDragStart={(event) => {
-                  event.dataTransfer.setData(
-                    "application/x-charter-contracts",
-                    dragPayload(contract.id),
-                  );
-                  event.dataTransfer.effectAllowed = "move";
-                }}
+                onDragStart={(event) => startContractDrag(event, dragPayload(contract.id))}
                 className={cn(
-                  "border-b border-border last:border-0 transition-colors",
+                  "group/row cursor-grab border-b border-border last:border-0 transition-colors",
                   selected.has(contract.id) ? "bg-primary-subtle" : "hover:bg-surface-muted",
                 )}
               >
                 <td className="px-3 py-2.5 align-top">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(contract.id)}
-                    onChange={() => onToggle(contract.id)}
-                    aria-label={`Select ${contract.title}`}
-                    className="size-3.5 accent-[color:var(--primary)]"
-                  />
+                  <div className="flex items-center gap-1">
+                    <GripVertical
+                      className="size-3 shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-60"
+                      aria-hidden
+                    />
+                    <input
+                      type="checkbox"
+                      checked={selected.has(contract.id)}
+                      onChange={() => onToggle(contract.id)}
+                      aria-label={`Select ${contract.title}`}
+                      className="size-3.5 accent-[color:var(--primary)]"
+                    />
+                  </div>
                 </td>
 
                 {config.order.map((key) => (
@@ -226,6 +226,18 @@ export function ContractTable({
       </button>
     </div>
   );
+}
+
+/**
+ * Only accepts a column drag, so dragging a contract row across the header does
+ * nothing. Both dragenter and dragover need this, and both need dropEffect — a
+ * missing dropEffect shows a "no drop" cursor and suppresses the drop event.
+ */
+function acceptColumnDrag(event: React.DragEvent): boolean {
+  if (!Array.from(event.dataTransfer.types).includes(COLUMN_DRAG_TYPE)) return false;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  return true;
 }
 
 function Cell({

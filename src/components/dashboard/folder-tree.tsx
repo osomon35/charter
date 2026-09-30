@@ -14,6 +14,11 @@ import type { FolderNode } from "@/lib/contracts/row-types";
 import type { Filters } from "@/lib/contracts/filters";
 import { useFilters } from "@/components/dashboard/use-filters";
 import { Input } from "@/components/ui/input";
+import {
+  acceptDrag,
+  readDrop,
+  startFolderDrag,
+} from "@/components/dashboard/dnd";
 import { cn } from "@/lib/utils";
 
 /**
@@ -55,20 +60,34 @@ export function FolderTree({
     event.preventDefault();
     setDropTarget(null);
 
-    const contractIds = event.dataTransfer.getData("application/x-charter-contracts");
-    const draggedFolder = event.dataTransfer.getData("application/x-charter-folder");
+    // Read synchronously: dataTransfer is neutered once the event handler returns.
+    const payload = readDrop(event);
+    if (!payload) return;
 
     startTransition(async () => {
-      if (contractIds) {
-        const ids = contractIds.split(",").filter(Boolean);
-        const result = await bulkMove({ contractIds: ids, folderId });
+      if (payload.kind === "contracts") {
+        const result = await bulkMove({ contractIds: payload.ids, folderId });
         if (!result.ok) setError(result.error);
-      } else if (draggedFolder && draggedFolder !== folderId) {
-        const result = await moveFolder({ id: draggedFolder, parentId: folderId });
+      } else if (payload.id !== folderId) {
+        const result = await moveFolder({ id: payload.id, parentId: folderId });
         if (!result.ok) setError(result.error);
       }
       router.refresh();
     });
+  }
+
+  /** Shared by every drop zone so none can forget one of the three requirements. */
+  function dropZoneProps(folderId: string | null, key: string) {
+    return {
+      onDragEnter: (event: React.DragEvent) => {
+        if (acceptDrag(event)) setDropTarget(key);
+      },
+      onDragOver: (event: React.DragEvent) => {
+        if (acceptDrag(event)) setDropTarget(key);
+      },
+      onDragLeave: () => setDropTarget((current) => (current === key ? null : current)),
+      onDrop: (event: React.DragEvent) => handleDrop(event, folderId),
+    };
   }
 
   function renderNode(node: FolderNode) {
@@ -80,16 +99,8 @@ export function FolderTree({
       <li key={node.id}>
         <div
           draggable
-          onDragStart={(event) => {
-            event.dataTransfer.setData("application/x-charter-folder", node.id);
-            event.dataTransfer.effectAllowed = "move";
-          }}
-          onDragOver={(event) => {
-            event.preventDefault();
-            setDropTarget(node.id);
-          }}
-          onDragLeave={() => setDropTarget((current) => (current === node.id ? null : current))}
-          onDrop={(event) => handleDrop(event, node.id)}
+          onDragStart={(event) => startFolderDrag(event, node.id)}
+          {...dropZoneProps(node.id, node.id)}
           style={{ paddingLeft: `${node.depth * 12 + 6}px` }}
           className={cn(
             "group flex items-center gap-1 rounded-md py-1 pr-1 text-sm transition-colors",
@@ -214,17 +225,12 @@ export function FolderTree({
         ) : null}
 
         <div
-          onDragOver={(event) => {
-            event.preventDefault();
-            setDropTarget("__root__");
-          }}
-          onDragLeave={() =>
-            setDropTarget((current) => (current === "__root__" ? null : current))
-          }
-          onDrop={(event) => handleDrop(event, null)}
+          {...dropZoneProps(null, "__root__")}
           className={cn(
-            "rounded-md px-1 py-1 text-xs text-muted-foreground",
-            dropTarget === "__root__" ? "ring-1 ring-primary" : "",
+            "rounded-md border border-dashed px-2 py-1.5 text-xs transition-colors",
+            dropTarget === "__root__"
+              ? "border-primary bg-primary-subtle text-foreground"
+              : "border-transparent text-muted-foreground",
           )}
         >
           Drop here to remove from a folder
