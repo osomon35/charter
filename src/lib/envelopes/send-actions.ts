@@ -109,6 +109,26 @@ export async function createAndSendEnvelope(input: unknown): Promise<SendResult>
 
   if (!contract) return { ok: false, error: "That contract is not available." };
 
+  // One live envelope per contract. Without this, a double-clicked Send button
+  // creates two of everything — two sets of links, two emails per recipient, and
+  // an audit trail that reads as though the document was sent twice, because it
+  // was. Cancelling the existing request is the deliberate way to resend.
+  const { data: active } = await supabase
+    .from("envelopes")
+    .select("id, status, sent_at")
+    .eq("contract_id", contractId)
+    .in("status", ["sent", "partially_signed"])
+    .limit(1)
+    .maybeSingle();
+
+  if (active) {
+    return {
+      ok: false,
+      error:
+        "This contract already has a signature request out. Cancel it on the contract page before sending again.",
+    };
+  }
+
   // --- 1. settle on the exact version recipients will see ------------------
   const sourceVersionId = await settleSourceVersion(contractId);
   if (!sourceVersionId) {

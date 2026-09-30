@@ -75,6 +75,9 @@ export function SendFlow({
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+  // A ref, not the busy state: setBusy does not take effect until the next
+  // render, so a fast second click would otherwise slip past a disabled button.
+  const sending = useRef(false);
 
   // --- document ------------------------------------------------------------
   useEffect(() => {
@@ -204,6 +207,8 @@ export function SendFlow({
 
   // --- send ----------------------------------------------------------------
   async function send() {
+    if (sending.current) return;
+    sending.current = true;
     setBusy(true);
     setError(null);
     setWarnings([]);
@@ -236,6 +241,7 @@ export function SendFlow({
     });
 
     setBusy(false);
+    sending.current = false;
 
     if (!result.ok) {
       setError(result.error);
