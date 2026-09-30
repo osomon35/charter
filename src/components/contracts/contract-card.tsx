@@ -27,8 +27,11 @@ export function ContractCard({ contract }: { contract: ContractWithLatest }) {
             <img
               src={`/api/versions/${latest.id}/thumbnail`}
               alt=""
+              width={72}
+              height={96}
               className="h-full w-full object-cover object-top"
               loading="lazy"
+              decoding="async"
             />
           ) : (
             <FileText className="size-5 text-muted-foreground" aria-hidden />

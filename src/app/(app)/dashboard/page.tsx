@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireOwner } from "@/lib/auth";
-import { listContracts, statusCounts } from "@/lib/contracts/queries";
+import { countByStatus, listContracts } from "@/lib/contracts/queries";
 import { PageHeader, EmptyState } from "@/components/shell/page-header";
 import { ContractCard } from "@/components/contracts/contract-card";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,7 +18,8 @@ const TILES = [
 
 export default async function DashboardPage() {
   const owner = await requireOwner();
-  const [counts, contracts] = await Promise.all([statusCounts(), listContracts()]);
+  const contracts = await listContracts();
+  const counts = countByStatus(contracts);
   const firstName = owner.fullName?.split(" ")[0];
   const recent = contracts.slice(0, 6);
 

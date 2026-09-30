@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { STORAGE_BUCKET } from "@/lib/contracts/types";
@@ -9,14 +8,17 @@ import { STORAGE_BUCKET } from "@/lib/contracts/types";
  *
  * Proxied rather than redirected to a signed URL: these are a few tens of
  * kilobytes and appear in pickers that re-render often, so an expiring redirect
- * per render would be worse on every count. RLS decides whose rows are
- * readable, so another owner's signature is a 404 here.
+ * per render would be worse on every count.
+ *
+ * Authorization is RLS alone, on purpose. The signatures policy is scoped to
+ * `is_owner() and user_id = auth.uid()`, so another owner's signature is a 404
+ * here — and calling requireOwner() as well would add a token revalidation to
+ * every thumbnail in the picker.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  await requireOwner();
   const { id } = await params;
 
   const supabase = await createClient();
@@ -34,11 +36,18 @@ export async function GET(
 
   if (error || !data) return new NextResponse("Not found", { status: 404 });
 
+  const etag = `"sig-${id}"`;
+  if (request.headers.get("if-none-match") === etag) {
+    return new NextResponse(null, { status: 304, headers: { ETag: etag } });
+  }
+
   return new NextResponse(await data.arrayBuffer(), {
     status: 200,
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "private, max-age=3600",
+      ETag: etag,
+      // A signature is never edited in place; deleting it removes the row too.
+      "Cache-Control": "private, max-age=31536000, immutable",
     },
   });
 }

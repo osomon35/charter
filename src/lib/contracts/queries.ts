@@ -65,7 +65,10 @@ export async function listContracts(): Promise<ContractWithLatest[]> {
     )
     .is("deleted_at", null)
     .is("archived_at", null)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    // Phase 6 adds paging and filters; until then a ceiling keeps one enormous
+    // payload from being the thing that makes the list feel slow.
+    .limit(200);
 
   if (error) {
     console.error("list_contracts_failed", { message: error.message });
@@ -129,18 +132,17 @@ export async function listVersions(contractId: string): Promise<VersionRow[]> {
   return (data ?? []) as VersionRow[];
 }
 
-/** Counts per status, for the dashboard tiles. */
-export async function statusCounts(): Promise<Record<string, number>> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("contracts")
-    .select("status")
-    .is("deleted_at", null)
-    .is("archived_at", null);
-
+/**
+ * Counts per status, derived from a list already in hand.
+ *
+ * Was a second query against contracts alongside listContracts, fetching the
+ * same rows twice for one number each. The dashboard needs both, so it fetches
+ * once and counts locally.
+ */
+export function countByStatus(contracts: ContractWithLatest[]): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const row of (data ?? []) as { status: string }[]) {
-    counts[row.status] = (counts[row.status] ?? 0) + 1;
+  for (const contract of contracts) {
+    counts[contract.status] = (counts[contract.status] ?? 0) + 1;
   }
   return counts;
 }

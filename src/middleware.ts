@@ -54,7 +54,17 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except Next internals and static assets.
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$).*)",
+    /**
+     * Everything except Next internals, static assets, and /api.
+     *
+     * API routes are excluded deliberately. Middleware's only jobs are
+     * refreshing the session cookie and redirecting anonymous page requests;
+     * neither applies to a fetch, and every route under /api authorises itself
+     * — through requireOwner, through RLS on the querying session, or by
+     * resolving a signer token. Leaving them in meant a thumbnail request paid
+     * for a full token revalidation against Supabase before it even reached the
+     * handler, which on a dashboard of cards is most of the page's latency.
+     */
+    "/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$).*)",
   ],
 };

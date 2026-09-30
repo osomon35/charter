@@ -28,6 +28,9 @@ const nextConfig: NextConfig = {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
   experimental: {
+    // lucide-react is a barrel of ~1500 modules; without this, importing four
+    // icons pulls the lot into the compilation graph.
+    optimizePackageImports: ["lucide-react"],
     // Signature PNGs are posted through a server action so the bytes can be
     // checked before they are stored. Trimmed, they are tens of kilobytes; the
     // default 1 MB limit leaves no margin for an uploaded one.
