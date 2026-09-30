@@ -38,6 +38,8 @@ const sendSchema = z.object({
   subject: z.string().trim().max(200).optional(),
   message: z.string().trim().max(4000).optional(),
   expiryDays: z.number().int().min(1).max(365).default(DEFAULT_EXPIRY_DAYS),
+  // null means no automatic chasing; the manual Nudge button always works.
+  reminderAfterDays: z.number().int().min(1).max(90).nullable().default(null),
   recipients: z.array(recipientSchema).min(1).max(50),
   fields: z.array(fieldSchema).max(500),
 });
@@ -82,7 +84,16 @@ export async function createAndSendEnvelope(input: unknown): Promise<SendResult>
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Those details are not valid." };
   }
-  const { contractId, routing, subject, message, expiryDays, recipients, fields } = parsed.data;
+  const {
+    contractId,
+    routing,
+    subject,
+    message,
+    expiryDays,
+    reminderAfterDays,
+    recipients,
+    fields,
+  } = parsed.data;
 
   // Every field must belong to a recipient that exists in this request.
   for (const field of fields) {
@@ -151,6 +162,7 @@ export async function createAndSendEnvelope(input: unknown): Promise<SendResult>
       subject: subject || `Please sign: ${contract.title}`,
       message: message || null,
       expires_at: expiresAt,
+      reminder_after_days: reminderAfterDays,
       sent_at: new Date().toISOString(),
       created_by: owner.id,
     })

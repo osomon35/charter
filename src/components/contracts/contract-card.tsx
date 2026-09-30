@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Clock, FileText, PenLine, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { STATUS_CLASSES, STATUS_LABELS, formatBytes } from "@/lib/contracts/types";
-import type { ContractWithLatest } from "@/lib/contracts/queries";
+import type { ContractWithLatest } from "@/lib/contracts/row-types";
 import { DeleteContractButton } from "@/components/contracts/delete-contract-button";
 
 export function ContractCard({ contract }: { contract: ContractWithLatest }) {

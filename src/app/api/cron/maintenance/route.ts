@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generateToken, hashToken } from "@/lib/envelopes/tokens";
+import { notifyRecipient } from "@/lib/envelopes/notify";
+import { recordAudit } from "@/lib/envelopes/audit";
 
 /**
  * Daily housekeeping, run by Vercel Cron.
@@ -12,7 +15,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   2. Mark envelopes whose links have expired. Expiry is already enforced when
  *      a token is resolved, so this is about the owner's view being honest
  *      rather than about access.
- *   3. Purge contracts soft-deleted more than 30 days ago, and their stored
+ *   3. Send auto-reminders for envelopes configured with one.
+ *   4. Purge contracts soft-deleted more than 30 days ago, and their stored
  *      objects, which is the promise the Trash makes.
  *
  * Authenticated by CRON_SECRET, compared in constant time. Vercel sends it as a
@@ -65,7 +69,10 @@ export async function GET(request: Request) {
       .neq("status", "signed");
   }
 
-  // 3. Purge the trash.
+  // 3. Auto-reminders.
+  report.reminders_sent = await sendAutoReminders();
+
+  // 4. Purge the trash.
   const cutoff = new Date();
   cutoff.setUTCDate(cutoff.getUTCDate() - PURGE_AFTER_DAYS);
 
@@ -87,6 +94,103 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ ok: true, at: nowIso, ...report });
 }
+
+/**
+ * Nudges recipients on envelopes that asked for reminders.
+ *
+ * A reminder has to mint a fresh token, because the stored hash is one-way and
+ * the original link is unrecoverable by design. That invalidates the previous
+ * link, which is the correct trade: a recipient following an old email gets a
+ * dead link rather than two live credentials existing at once.
+ *
+ * Paced off whichever is later of the last reminder and the original
+ * notification, so turning reminders on for an old envelope does not fire
+ * immediately.
+ */
+async function sendAutoReminders(): Promise<number> {
+  const admin = createAdminClient();
+
+  const { data: envelopes } = await admin
+    .from("envelopes")
+    .select(
+      "id, contract_id, message, expires_at, reminder_after_days, last_reminder_at, sent_at, contracts(title)",
+    )
+    .in("status", ["sent", "partially_signed"])
+    .not("reminder_after_days", "is", null);
+
+  let sent = 0;
+
+  for (const envelope of (envelopes ?? []) as EnvelopeForReminder[]) {
+    const days = envelope.reminder_after_days;
+    if (!days) continue;
+
+    const since = envelope.last_reminder_at ?? envelope.sent_at;
+    if (!since) continue;
+
+    const dueAt = new Date(since).getTime() + days * 86_400_000;
+    if (Date.now() < dueAt) continue;
+
+    const { data: pending } = await admin
+      .from("recipients")
+      .select("id, name, email, status")
+      .eq("envelope_id", envelope.id)
+      .not("status", "in", "(signed,declined)");
+
+    let anySent = false;
+
+    for (const recipient of (pending ?? []) as { id: string; name: string; email: string }[]) {
+      const token = generateToken();
+      await admin
+        .from("recipients")
+        .update({ token_hash: hashToken(token), token_expires_at: envelope.expires_at })
+        .eq("id", recipient.id);
+
+      const result = await notifyRecipient({
+        recipientId: recipient.id,
+        token,
+        name: recipient.name,
+        email: recipient.email,
+        senderName: "Charter",
+        documentTitle: envelope.contracts?.title ?? "your document",
+        message: envelope.message,
+        expiresAt: envelope.expires_at,
+      });
+
+      if (result.ok) {
+        anySent = true;
+        sent += 1;
+        await recordAudit({
+          contractId: envelope.contract_id,
+          envelopeId: envelope.id,
+          recipientId: recipient.id,
+          kind: "reminded",
+          actor: "system",
+          detail: { email: recipient.email, automatic: true },
+        });
+      }
+    }
+
+    if (anySent) {
+      await admin
+        .from("envelopes")
+        .update({ last_reminder_at: new Date().toISOString() })
+        .eq("id", envelope.id);
+    }
+  }
+
+  return sent;
+}
+
+type EnvelopeForReminder = {
+  id: string;
+  contract_id: string;
+  message: string | null;
+  expires_at: string | null;
+  reminder_after_days: number | null;
+  last_reminder_at: string | null;
+  sent_at: string | null;
+  contracts: { title: string } | null;
+};
 
 /** Removes everything under a contract's prefix in the private bucket. */
 async function removeStoredObjects(contractId: string): Promise<void> {

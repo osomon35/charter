@@ -1,43 +1,120 @@
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
-import { listContracts } from "@/lib/contracts/queries";
+import { parseFilters, hasActiveFilters } from "@/lib/contracts/filters";
+import {
+  listFolders,
+  listTags,
+  queryContracts,
+  viewCounts,
+} from "@/lib/contracts/dashboard-queries";
 import { PageHeader, EmptyState } from "@/components/shell/page-header";
 import { Uploader } from "@/components/upload/uploader";
-import { ContractCard } from "@/components/contracts/contract-card";
+import { Toolbar } from "@/components/dashboard/toolbar";
+import { FolderTree } from "@/components/dashboard/folder-tree";
+import { ContractList } from "@/components/dashboard/contract-list";
+import { Pagination } from "@/components/dashboard/pagination";
+import { TagManager } from "@/components/dashboard/tag-manager";
 
 export const metadata: Metadata = { title: "Contracts" };
 
-export default async function ContractsPage() {
+const VIEW_COPY = {
+  live: {
+    title: "Contracts",
+    description:
+      "Drop a PDF to add it. The original is stored untouched — edits and signatures create new versions.",
+  },
+  archived: {
+    title: "Archived",
+    description: "Out of the main list but fully intact. Unarchive any of them at any time.",
+  },
+  trash: {
+    title: "Trash",
+    description:
+      "Deleted contracts, kept for 30 days and then purged along with their stored files. Restore anything here before then.",
+  },
+} as const;
+
+export default async function ContractsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireOwner();
-  const contracts = await listContracts();
+
+  const filters = parseFilters(await searchParams);
+
+  // One round trip each, in parallel: the folder tree, the tag list, the view
+  // counts, and the filtered page itself.
+  const [page, folders, tags, counts] = await Promise.all([
+    queryContracts(filters),
+    listFolders(),
+    listTags(),
+    viewCounts(),
+  ]);
+
+  const copy = VIEW_COPY[filters.view];
+  const filtered = hasActiveFilters(filters);
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <PageHeader
-        title="Contracts"
-        description="Drop a PDF to add it. The original is stored untouched — edits and signatures create new versions."
-      />
+    <div className="mx-auto max-w-7xl">
+      <PageHeader title={copy.title} description={copy.description} />
 
-      <Uploader />
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <aside className="w-full shrink-0 lg:w-56">
+          <FolderTree folders={folders} filters={filters} counts={counts} />
+        </aside>
 
-      <div className="mt-10">
-        {contracts.length === 0 ? (
-          <EmptyState
-            title="No contracts yet"
-            description="Once you upload a PDF it will appear here with its page count and a preview of the first page."
-          />
-        ) : (
-          <>
-            <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {contracts.length} contract{contracts.length === 1 ? "" : "s"}
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {contracts.map((contract) => (
-                <ContractCard key={contract.id} contract={contract} />
-              ))}
-            </div>
-          </>
-        )}
+        <div className="min-w-0 flex-1 space-y-5">
+          {filters.view === "live" ? <Uploader /> : null}
+
+          <Toolbar filters={filters} folders={folders} tags={tags} />
+
+          {page.rows.length === 0 ? (
+            <EmptyState
+              title={
+                filtered
+                  ? "Nothing matches those filters"
+                  : filters.view === "trash"
+                    ? "Trash is empty"
+                    : filters.view === "archived"
+                      ? "Nothing archived"
+                      : "No contracts yet"
+              }
+              description={
+                filtered
+                  ? "Try widening the search, or clear the filters to see everything again."
+                  : filters.view === "live"
+                    ? "Once you upload a PDF it will appear here with its page count and a preview of the first page."
+                    : "Contracts you archive or delete will show up here."
+              }
+            />
+          ) : (
+            <>
+              <ContractList
+                contracts={page.rows}
+                filters={filters}
+                folders={folders}
+                tags={tags}
+              />
+              <Pagination
+                filters={filters}
+                total={page.total}
+                pageCount={page.pageCount}
+              />
+            </>
+          )}
+
+          {filters.view === "live" ? (
+            <details className="rounded-lg border border-border bg-surface">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+                Manage tags
+              </summary>
+              <div className="border-t border-border p-4">
+                <TagManager tags={tags} />
+              </div>
+            </details>
+          ) : null}
+        </div>
       </div>
     </div>
   );

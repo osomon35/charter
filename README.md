@@ -18,14 +18,14 @@ Storage) · pdf-lib · pdf.js · Resend · Vercel.
 | 3 | Full-screen overlay editor, flatten to new version | Done |
 | 4 | Reusable signatures and initials | Done |
 | 5 | Recipients, fields, routing, signer flow, audit, certificate | Done |
-| 6 | Folders, tags, search, filters, archive, trash UI, reminders | **Not built** |
+| 6 | Folders, tags, search, filters, archive, trash, reminders | Done |
 | 7 | Workspaces, invites, roles | **Not built** |
 
-**What Phase 6 means in practice:** contracts appear in one flat list capped at
-200. There is no folder UI, no tags, no search, no filters, no Trash view, and no
-automatic reminders. Deleting a contract soft-deletes it — the row survives with
-a `deleted_at` stamp and the nightly cron purges it after 30 days — but there is
-no screen to restore one. The manual **Nudge** button on a contract works.
+**What Phase 7 would add:** several workspaces instead of one shared space,
+invites with per-member roles (block, remove, sending rights, self-signature
+only), and a per-workspace icon that doubles as the favicon. Agreed but not
+started — it re-scopes every RLS policy from `is_owner()` to workspace
+membership, so it is a re-architecture rather than an addition.
 
 ---
 

@@ -65,6 +65,7 @@ export function SendFlow({
   const [routing, setRouting] = useState<Routing>("parallel");
   const [message, setMessage] = useState("");
   const [expiryDays, setExpiryDays] = useState(30);
+  const [reminderDays, setReminderDays] = useState<number | null>(null);
 
   const [activeRecipient, setActiveRecipient] = useState(0);
   const [tool, setTool] = useState<FieldType>("signature");
@@ -282,6 +283,7 @@ export function SendFlow({
       routing,
       message: message.trim() || undefined,
       expiryDays,
+      reminderAfterDays: reminderDays,
       recipients: validRecipients.map((recipient) => ({
         name: recipient.name.trim(),
         email: recipient.email.trim().toLowerCase(),
@@ -722,6 +724,28 @@ export function SendFlow({
                   </option>
                 ))}
               </Select>
+            </div>
+
+            <div className="mt-6 space-y-2">
+              <Label htmlFor="reminder">Automatic reminders</Label>
+              <Select
+                id="reminder"
+                value={reminderDays === null ? "" : String(reminderDays)}
+                onChange={(event) =>
+                  setReminderDays(event.target.value ? Number(event.target.value) : null)
+                }
+              >
+                <option value="">Off — I will nudge manually</option>
+                {[2, 3, 5, 7, 14].map((days) => (
+                  <option key={days} value={days}>
+                    Every {days} days until they respond
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                A reminder issues a fresh link and invalidates the previous one, since tokens
+                are stored hashed and the original cannot be re-sent.
+              </p>
             </div>
 
             <div className="mt-8 rounded-lg border border-border bg-surface">

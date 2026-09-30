@@ -1,5 +1,5 @@
 import { auditLabel } from "@/lib/envelopes/types";
-import type { AuditView } from "@/lib/envelopes/queries";
+import type { AuditView } from "@/lib/envelopes/view-types";
 
 /**
  * The audit trail, newest first.

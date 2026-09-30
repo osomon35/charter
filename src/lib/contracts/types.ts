@@ -28,6 +28,48 @@ export const STATUS_CLASSES: Record<ContractStatus, string> = {
   expired: "border-border-strong bg-muted text-muted-foreground",
 };
 
+/**
+ * Tag colours are a fixed set, matched by a CHECK constraint on the tags table.
+ * A free-form colour would mean validating arbitrary CSS on the way in and
+ * having no way to keep the palette coherent.
+ */
+export const TAG_COLORS = [
+  "slate",
+  "blue",
+  "green",
+  "amber",
+  "red",
+  "violet",
+  "teal",
+  "pink",
+] as const;
+
+export type TagColor = (typeof TAG_COLORS)[number];
+
+/** Border/background/text per tag colour, in both themes. */
+export const TAG_COLOR_CLASSES: Record<TagColor, string> = {
+  slate: "border-border-strong bg-muted text-muted-foreground",
+  blue: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  green: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  amber: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  red: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
+  violet: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  teal: "border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300",
+  pink: "border-pink-500/30 bg-pink-500/10 text-pink-700 dark:text-pink-300",
+};
+
+/** Swatch colour for pickers, where a background alone has to read. */
+export const TAG_SWATCHES: Record<TagColor, string> = {
+  slate: "#64748b",
+  blue: "#3b82f6",
+  green: "#10b981",
+  amber: "#f59e0b",
+  red: "#ef4444",
+  violet: "#8b5cf6",
+  teal: "#14b8a6",
+  pink: "#ec4899",
+};
+
 export const STORAGE_BUCKET = "contracts";
 
 /** Hard cap, mirrored on the bucket in the migration. */

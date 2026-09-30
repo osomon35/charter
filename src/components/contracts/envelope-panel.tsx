@@ -10,7 +10,7 @@ import {
   recipientColor,
   type RecipientStatus,
 } from "@/lib/envelopes/types";
-import type { EnvelopeView } from "@/lib/envelopes/queries";
+import type { EnvelopeView } from "@/lib/envelopes/view-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -57,6 +57,12 @@ export function EnvelopePanel({ envelope }: { envelope: EnvelopeView }) {
           <>
             <span>·</span>
             <span>Expires {new Date(envelope.expires_at).toLocaleDateString()}</span>
+          </>
+        ) : null}
+        {envelope.reminder_after_days ? (
+          <>
+            <span>·</span>
+            <span>Reminders every {envelope.reminder_after_days} days</span>
           </>
         ) : null}
       </div>

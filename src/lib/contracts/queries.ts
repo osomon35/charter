@@ -1,53 +1,26 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ContractStatus } from "@/lib/contracts/types";
+import type {
+  ContractRow,
+  ContractWithLatest,
+  SigningProgress,
+  VersionRow,
+} from "@/lib/contracts/row-types";
 
-export type ContractRow = {
-  id: string;
-  title: string;
-  counterparty_name: string | null;
-  status: ContractStatus;
-  folder_id: string | null;
-  notes: string | null;
-  effective_date: string | null;
-  expiry_date: string | null;
-  updated_at: string;
-  created_at: string;
-};
-
-export type VersionRow = {
-  id: string;
-  version_no: number;
-  kind: "original" | "edited" | "signed";
-  state: "pending" | "ready" | "failed";
-  page_count: number | null;
-  byte_size: number | null;
-  sha256: string | null;
-  thumbnail_path: string | null;
-  original_name: string | null;
-  created_at: string;
-};
+export type {
+  ContractRow,
+  ContractWithLatest,
+  SigningProgress,
+  VersionRow,
+} from "@/lib/contracts/row-types";
 
 /**
- * How far a live signature request has got. Null when nothing is out for
- * signature — which is different from "nobody has signed", and the dashboard
- * needs to tell those apart.
- */
-export type SigningProgress = {
-  signed: number;
-  total: number;
-  declined: number;
-};
-
-export type ContractWithLatest = ContractRow & {
-  latest: VersionRow | null;
-  signing: SigningProgress | null;
-};
-
-/**
- * Live contracts, newest activity first. "Live" excludes archived and
- * soft-deleted rows; Phase 6 adds the views that show those.
+ * Live contracts, newest activity first, for the dashboard's Recent strip.
+ *
+ * The contracts list itself uses queryContracts in dashboard-queries.ts, which
+ * filters and pages in Postgres. This one stays deliberately simple: a short
+ * unfiltered slice is all the dashboard shows.
  */
 export async function listContracts(): Promise<ContractWithLatest[]> {
   const supabase = await createClient();
@@ -201,4 +174,15 @@ export async function getSourceVersion(contractId: string): Promise<VersionRow |
     .maybeSingle();
 
   return (data as VersionRow | null) ?? null;
+}
+
+/** Just the tag ids on one contract, for the picker's initial state. */
+export async function listAssignedTagIds(contractId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("contract_tags")
+    .select("tag_id")
+    .eq("contract_id", contractId);
+
+  return ((data ?? []) as { tag_id: string }[]).map((row) => row.tag_id);
 }

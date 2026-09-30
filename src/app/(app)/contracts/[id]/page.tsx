@@ -3,8 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, FileText, PenLine, Send } from "lucide-react";
 import { requireOwner } from "@/lib/auth";
-import { getContract, listVersions } from "@/lib/contracts/queries";
+import { getContract, listAssignedTagIds, listVersions } from "@/lib/contracts/queries";
 import { listAudit, listEnvelopes } from "@/lib/envelopes/queries";
+import { listTags } from "@/lib/contracts/dashboard-queries";
+import { TagPicker } from "@/components/contracts/tag-picker";
 import { EnvelopePanel } from "@/components/contracts/envelope-panel";
 import { AuditTrail } from "@/components/contracts/audit-trail";
 import { formatBytes } from "@/lib/contracts/types";
@@ -26,10 +28,12 @@ export default async function ContractPage({
   const contract = await getContract(id);
   if (!contract) notFound();
 
-  const [versions, envelopes, audit] = await Promise.all([
+  const [versions, envelopes, audit, tags, assignedTags] = await Promise.all([
     listVersions(id),
     listEnvelopes(id),
     listAudit(id),
+    listTags(),
+    listAssignedTagIds(id),
   ]);
 
   return (
@@ -83,8 +87,12 @@ export default async function ContractPage({
           <CardHeader>
             <CardTitle>Details</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             <MetadataForm contract={contract} />
+            <div className="space-y-2 border-t border-border pt-5">
+              <p className="text-sm font-medium">Tags</p>
+              <TagPicker contractId={contract.id} allTags={tags} assigned={assignedTags} />
+            </div>
           </CardContent>
         </Card>
 
