@@ -1,6 +1,7 @@
 import { requireOwner } from "@/lib/auth";
 import { SidebarNav } from "@/components/shell/sidebar";
 import { SignOutButton } from "@/components/shell/sign-out-button";
+import { ThemeToggle } from "@/components/shell/theme-toggle";
 
 /**
  * Every route in this group is gated here. requireOwner() redirects anyone
@@ -28,6 +29,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
 
         <div className="border-t border-border px-2.5 py-3">
+          <div className="px-1 pb-3">
+            <ThemeToggle />
+          </div>
           <div className="px-2.5 pb-2">
             <p className="truncate text-[13px] font-medium">{owner.fullName ?? "Owner"}</p>
             <p className="truncate text-xs text-muted-foreground">{owner.email}</p>

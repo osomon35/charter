@@ -97,6 +97,8 @@
     border-color: var(--border);
   }
 
+  /* The pre-paint script in the root layout puts `.dark` on <html>; these two
+     keep native form controls and scrollbars in step with it. */
   html {
     color-scheme: light;
   }
@@ -104,6 +106,9 @@
   html.dark {
     color-scheme: dark;
   }
+
+  /* Tokens live on :root.dark, so a viewer left on "system" still needs the
+     class — the script and the toggle both set it from matchMedia. */
 
   body {
     background-color: var(--background);
