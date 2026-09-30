@@ -19,6 +19,7 @@ export type {
   TagRow,
 } from "@/lib/contracts/row-types";
 import { PAGE_SIZE, type Filters } from "@/lib/contracts/filters";
+import { embedOne } from "@/lib/supabase/embed";
 
 const SELECT = `
   id, title, counterparty_name, status, folder_id, effective_date, expiry_date,
@@ -132,7 +133,9 @@ export async function queryContracts(filters: Filters): Promise<ContractPage> {
 type RawRow = Omit<DashboardContract, "latest" | "signing" | "tags"> & {
   contract_versions: VersionRow[] | null;
   envelopes: { status: string; recipients: { status: string }[] | null }[] | null;
-  contract_tags: { tags: TagRow | null }[] | null;
+  // `tags` inside the join row is a to-one embed, so PostgREST sends an object
+  // while supabase-js types it as an array — embedOne below accepts either.
+  contract_tags: { tags: unknown }[] | null;
 };
 
 function shape(raw: unknown): DashboardContract {
@@ -162,7 +165,7 @@ function shape(raw: unknown): DashboardContract {
           }
         : null,
     tags: (contract_tags ?? [])
-      .map((join) => join.tags)
+      .map((join) => embedOne<TagRow>(join.tags))
       .filter((tag): tag is TagRow => Boolean(tag)),
   };
 }

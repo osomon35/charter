@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { STORAGE_BUCKET } from "@/lib/contracts/types";
 import { recordAudit } from "@/lib/envelopes/audit";
+import { embedOne } from "@/lib/supabase/embed";
 import { consume, clientIp } from "@/lib/rate-limit";
 import { resolveSignerToken, nextSequentialRecipient } from "@/lib/envelopes/signer";
 import { generateToken, hashToken } from "@/lib/envelopes/tokens";
@@ -269,7 +270,8 @@ export async function submitSignature(input: {
         .maybeSingle();
 
       const title =
-        (envelopeRow?.contracts as unknown as { title: string } | null)?.title ?? "your document";
+        embedOne<{ title: string }>(envelopeRow?.contracts as unknown)?.title ??
+        "your document";
 
       const nextToken = generateToken();
       await admin

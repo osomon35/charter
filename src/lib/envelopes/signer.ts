@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashToken } from "@/lib/envelopes/tokens";
+import { embedOne } from "@/lib/supabase/embed";
 import type { FieldType, Routing, SignerField } from "@/lib/envelopes/types";
 
 /**
@@ -74,7 +75,7 @@ export async function resolveSignerToken(token: string): Promise<SignerLookup> {
 
   if (error || !recipient) return { ok: false, reason: "invalid" };
 
-  const envelope = recipient.envelopes as unknown as {
+  const envelope = embedOne(recipient.envelopes) as unknown as {
     id: string;
     contract_id: string;
     source_version_id: string;
@@ -82,7 +83,7 @@ export async function resolveSignerToken(token: string): Promise<SignerLookup> {
     status: string;
     message: string | null;
     expires_at: string | null;
-    contracts: { title: string } | null;
+    contracts: { title: string } | { title: string }[] | null;
   } | null;
 
   if (!envelope) return { ok: false, reason: "invalid" };
@@ -146,7 +147,7 @@ export async function resolveSignerToken(token: string): Promise<SignerLookup> {
         expiresAt: envelope.expires_at,
       },
       document: {
-        title: envelope.contracts?.title ?? "Document",
+        title: embedOne<{ title: string }>(envelope.contracts as unknown)?.title ?? "Document",
         pageCount: sourceVersion?.page_count ?? 1,
         sha256: sourceVersion?.sha256 ?? null,
       },

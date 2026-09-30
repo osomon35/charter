@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateToken, hashToken } from "@/lib/envelopes/tokens";
 import { notifyRecipient } from "@/lib/envelopes/notify";
 import { recordAudit } from "@/lib/envelopes/audit";
+import { embedOne } from "@/lib/supabase/embed";
 
 /**
  * Daily housekeeping, run by Vercel Cron.
@@ -120,7 +121,7 @@ async function sendAutoReminders(): Promise<number> {
 
   let sent = 0;
 
-  for (const envelope of (envelopes ?? []) as EnvelopeForReminder[]) {
+  for (const envelope of (envelopes ?? []) as unknown as EnvelopeForReminder[]) {
     const days = envelope.reminder_after_days;
     if (!days) continue;
 
@@ -151,7 +152,8 @@ async function sendAutoReminders(): Promise<number> {
         name: recipient.name,
         email: recipient.email,
         senderName: "Charter",
-        documentTitle: envelope.contracts?.title ?? "your document",
+        documentTitle:
+          embedOne<{ title: string }>(envelope.contracts)?.title ?? "your document",
         message: envelope.message,
         expiresAt: envelope.expires_at,
       });
@@ -189,7 +191,9 @@ type EnvelopeForReminder = {
   reminder_after_days: number | null;
   last_reminder_at: string | null;
   sent_at: string | null;
-  contracts: { title: string } | null;
+  // Left as unknown: PostgREST renders a to-one embed as an object while
+  // supabase-js types it as an array, so embedOne resolves it at the use site.
+  contracts: unknown;
 };
 
 /** Removes everything under a contract's prefix in the private bucket. */

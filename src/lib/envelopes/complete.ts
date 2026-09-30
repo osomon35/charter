@@ -7,6 +7,7 @@ import { flattenOverlay, type ImageAsset } from "@/lib/editor/flatten";
 import { overlaySchema } from "@/lib/editor/schema";
 import { newElement, todayLabel, type OverlayElement } from "@/lib/editor/types";
 import { recordAudit } from "@/lib/envelopes/audit";
+import { embedOne } from "@/lib/supabase/embed";
 import { appendCertificate } from "@/lib/envelopes/certificate";
 import { sendEmail } from "@/lib/email/resend";
 import { ownerSender } from "@/lib/email/sender";
@@ -130,8 +131,7 @@ export async function completeEnvelope(envelopeId: string): Promise<void> {
 
   try {
     output = await appendCertificate(output, {
-      documentTitle:
-        (envelope.contracts as unknown as { title: string } | null)?.title ?? "Document",
+      documentTitle: embedOne<{ title: string }>(envelope.contracts as unknown)?.title ?? "Document",
       envelopeId,
       routing: envelope.routing,
       completedAt,
@@ -239,7 +239,9 @@ export async function completeEnvelope(envelopeId: string): Promise<void> {
   });
 
   // --- email everyone the signed copy --------------------------------------
-  const title = (envelope.contracts as unknown as { title: string } | null)?.title ?? "Document";
+  const title =
+    embedOne<{ title: string }>(envelope.contracts as unknown)?.title ??
+    "Document";
   const names = ((recipients ?? []) as { name: string }[]).map((r) => r.name);
   const addresses = [
     ...new Set([

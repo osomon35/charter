@@ -11,6 +11,7 @@ import { recordAudit } from "@/lib/envelopes/audit";
 import { FIELD_TYPES, ROUTINGS } from "@/lib/envelopes/types";
 import { DEFAULT_EXPIRY_DAYS, expiryFromNow, generateToken, hashToken } from "@/lib/envelopes/tokens";
 import { notifyRecipient } from "@/lib/envelopes/notify";
+import { embedOne } from "@/lib/supabase/embed";
 import { flattenToNewVersion } from "@/lib/editor/actions";
 import { overlaySchema } from "@/lib/editor/schema";
 
@@ -345,12 +346,12 @@ export async function nudgeRecipient(
     return { ok: false, error: "That recipient has already responded." };
   }
 
-  const envelope = recipient.envelopes as unknown as {
+  const envelope = embedOne(recipient.envelopes) as unknown as {
     contract_id: string;
     message: string | null;
     expires_at: string | null;
     status: string;
-    contracts: { title: string } | null;
+    contracts: { title: string } | { title: string }[] | null;
   } | null;
 
   if (!envelope || (envelope.status !== "sent" && envelope.status !== "partially_signed")) {
@@ -373,7 +374,7 @@ export async function nudgeRecipient(
     name: recipient.name,
     email: recipient.email,
     senderName: owner.fullName ?? owner.email,
-    documentTitle: envelope.contracts?.title ?? "your document",
+    documentTitle: embedOne<{ title: string }>(envelope.contracts as unknown)?.title ?? "your document",
     message: envelope.message,
     expiresAt: envelope.expires_at,
   });
