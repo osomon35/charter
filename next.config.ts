@@ -20,6 +20,10 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // `next build` runs ESLint by default, which means a lint config problem
+  // fails the deploy. CI runs `npm run lint` as its own step, so nothing is
+  // lost by taking it off the build's critical path.
+  eslint: { ignoreDuringBuilds: true },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
