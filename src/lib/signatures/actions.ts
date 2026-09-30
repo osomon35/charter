@@ -67,11 +67,13 @@ export async function saveSignature(formData: FormData): Promise<SaveSignatureRe
     height: formData.get("height"),
   });
 
-  if (!parsed.success) return { error: "That signature could not be saved." };
+  if (!parsed.success) {
+    return { error: `Invalid signature details: ${parsed.error.issues[0]?.message ?? "unknown"}` };
+  }
 
   const file = formData.get("image");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "There is nothing to save yet." };
+  if (!(file instanceof Blob) || file.size === 0) {
+    return { error: "There is nothing to save yet (no image in the request)." };
   }
   if (file.size > MAX_SIGNATURE_BYTES) {
     return { error: "That image is too large." };
@@ -91,7 +93,7 @@ export async function saveSignature(formData: FormData): Promise<SaveSignatureRe
 
   if (uploadError) {
     console.error("signature_upload_failed", { message: uploadError.message });
-    return { error: "That signature could not be stored." };
+    return { error: `Storage rejected the upload: ${uploadError.message}` };
   }
 
   const supabase = await createClient();
@@ -111,7 +113,9 @@ export async function saveSignature(formData: FormData): Promise<SaveSignatureRe
   if (error || !data) {
     console.error("signature_insert_failed", { message: error?.message });
     await admin.storage.from(STORAGE_BUCKET).remove([path]);
-    return { error: "That signature could not be saved." };
+    return {
+      error: `Database rejected the signature: ${error?.message ?? "no row returned"}`,
+    };
   }
 
   revalidatePath("/settings");

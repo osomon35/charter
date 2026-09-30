@@ -191,9 +191,11 @@ export function SignatureCreator({ fontClass }: { fontClass: string }) {
             />
           </div>
 
-          <div className="flex min-h-28 items-center justify-center rounded-md border border-border bg-surface px-4">
+          {/* White with dark ink regardless of theme, matching the PNG this
+              produces rather than the surrounding UI. */}
+          <div className="flex min-h-28 items-center justify-center rounded-md border border-border bg-white px-4">
             <span
-              className={cn("text-5xl leading-tight", fontClass)}
+              className={cn("text-5xl leading-tight text-[#111827]", fontClass)}
               style={{ fontFamily: "var(--font-caveat), cursive" }}
             >
               {typed.trim() || "Preview"}

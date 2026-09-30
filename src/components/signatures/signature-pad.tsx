@@ -91,7 +91,10 @@ export function SignaturePad({
     <canvas
       ref={canvasRef}
       style={{ height, touchAction: "none" }}
-      className="w-full cursor-crosshair rounded-md border border-border bg-surface"
+      // Deliberately white in both themes: this represents the page the
+      // signature will be drawn on, and the exported PNG is near-black ink.
+      // Following the theme here would show light ink and export dark.
+      className="w-full cursor-crosshair rounded-md border border-border bg-white"
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
         drawing.current = true;
