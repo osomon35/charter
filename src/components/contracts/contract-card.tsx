@@ -58,7 +58,7 @@ export function ContractCard({ contract }: { contract: ContractWithLatest }) {
       {/* Revealed on hover, and on keyboard focus so it is not mouse-only. */}
       <div className="absolute right-2 top-2 z-20 flex items-center gap-1.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
         <Link
-          href={`/contracts/${contract.id}/sign`}
+          href={`/editor/${contract.id}`}
           className="flex h-6 items-center gap-1 rounded-md border border-border bg-surface px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
         >
           <PenLine className="size-3" aria-hidden />

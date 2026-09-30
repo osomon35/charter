@@ -10,16 +10,13 @@
  * and the upload carries on without one.
  */
 
+import { loadPdfjs } from "@/lib/pdfjs";
+
 const THUMBNAIL_WIDTH = 480;
 
 export async function renderFirstPageThumbnail(file: File): Promise<Blob | null> {
   try {
-    const pdfjs = await import("pdfjs-dist");
-
-    // The worker must match the library version exactly. Deriving the URL from
-    // the imported version means a dependency bump cannot silently mismatch.
-    pdfjs.GlobalWorkerOptions.workerSrc =
-      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+    const pdfjs = await loadPdfjs();
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const doc = await pdfjs.getDocument({ data: bytes }).promise;

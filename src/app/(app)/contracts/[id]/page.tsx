@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, FileText } from "lucide-react";
+import { ArrowLeft, Download, FileText, PenLine } from "lucide-react";
 import { requireOwner } from "@/lib/auth";
 import { getContract, listVersions } from "@/lib/contracts/queries";
 import { formatBytes } from "@/lib/contracts/types";
@@ -46,15 +46,21 @@ export default async function ContractPage({
         </div>
 
         {contract.latest ? (
-          <a
-            href={`/api/versions/${contract.latest.id}/file`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <Download aria-hidden />
-            Open PDF
-          </a>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/api/versions/${contract.latest.id}/file`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Download aria-hidden />
+              Open PDF
+            </a>
+            <Link href={`/editor/${contract.id}`} className={buttonVariants({ size: "sm" })}>
+              <PenLine aria-hidden />
+              Edit &amp; sign
+            </Link>
+          </div>
         ) : null}
       </div>
 
