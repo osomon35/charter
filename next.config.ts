@@ -27,6 +27,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  webpack(config) {
+    // pdfjs-dist declares `canvas` as an optional dependency for its Node
+    // build. Nothing in the browser entry uses it, but webpack still tries to
+    // resolve it and fails the build, so stub it out.
+    config.resolve.alias = { ...config.resolve.alias, canvas: false };
+    return config;
+  },
 };
 
 export default nextConfig;
