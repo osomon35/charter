@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, FileText, PenLine, ShieldCheck } from "lucide-react";
 import { loadPdfjs, type PdfDocument } from "@/lib/pdfjs";
-import { PageCanvas } from "@/components/editor/page-canvas";
+import { usePageImages, type PageImage } from "@/lib/pdf-pages";
+import { PageImageView } from "@/components/editor/page-image";
 import { SignatureCapture } from "@/components/signer/signature-capture";
 import {
   declineToSign,
@@ -77,6 +78,8 @@ export function SignerExperience({
 
   const [doc, setDoc] = useState<PdfDocument | null>(null);
   const [pageWidth, setPageWidth] = useState(0);
+  const { pages, rendered, total, error: renderError } = usePageImages(doc, pageCount);
+
   const viewportRef = useRef<HTMLDivElement>(null);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -314,15 +317,10 @@ export function SignerExperience({
             ? Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => (
                 <SignerPage
                   key={pageNumber}
-                  doc={doc}
                   pageNumber={pageNumber}
                   width={pageWidth}
                   interactive={phase === "filling"}
-                  onRenderError={() =>
-                    setError(
-                      "Part of this document could not be displayed. Open it with the link below before signing.",
-                    )
-                  }
+                  image={pages[pageNumber - 1] ?? null}
                   fields={fields.filter((field) => field.page === pageNumber)}
                   values={values}
                   activeId={activeId}
@@ -354,6 +352,17 @@ export function SignerExperience({
                 Loading document…
               </div>
             )}
+
+          {renderError ? (
+            <Alert tone="error">
+              Part of this document could not be displayed here. Open it with the link above
+              before signing.
+            </Alert>
+          ) : doc && rendered < total ? (
+            <p className="text-center text-xs text-muted-foreground">
+              Rendering pages… {rendered} of {total}
+            </p>
+          ) : null}
         </div>
       </main>
 
@@ -455,11 +464,10 @@ export function SignerExperience({
 
 /** One page, with this recipient's fields laid over it in normalized position. */
 function SignerPage({
-  doc,
   pageNumber,
   width,
   interactive,
-  onRenderError,
+  image,
   fields,
   values,
   activeId,
@@ -468,11 +476,10 @@ function SignerPage({
   onText,
   onToggle,
 }: {
-  doc: PdfDocument;
   pageNumber: number;
   width: number;
   interactive: boolean;
-  onRenderError: (message: string) => void;
+  image: PageImage | null;
   fields: SignerField[];
   values: Record<string, Filled>;
   activeId: string | null;
@@ -486,12 +493,7 @@ function SignerPage({
       className="relative mx-auto overflow-hidden rounded-lg border border-border bg-white shadow-sm"
       style={{ width: width || undefined }}
     >
-      <PageCanvas
-        doc={doc}
-        pageNumber={pageNumber}
-        cssWidth={width}
-        onError={onRenderError}
-      />
+      <PageImageView image={image} pageNumber={pageNumber} width={width} />
 
       {fields.map((field) => {
         const value = values[field.id] ?? {};

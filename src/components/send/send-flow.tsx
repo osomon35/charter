@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, Plus, Send, Trash2, X } from "lucide-react";
 import { loadPdfjs, type PdfDocument } from "@/lib/pdfjs";
-import { PageCanvas } from "@/components/editor/page-canvas";
+import { usePageImages } from "@/lib/pdf-pages";
+import { PageImageView } from "@/components/editor/page-image";
 import { createAndSendEnvelope, getSendPreviewUrl } from "@/lib/envelopes/send-actions";
 import {
   FIELD_LABELS,
@@ -76,8 +77,11 @@ export function SendFlow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [renderError, setRenderError] = useState<string | null>(null);
+
   const [links, setLinks] = useState<{ email: string; url: string }[]>([]);
+
+  // Rendered once per page, up front, then displayed as images — see usePageImages.
+  const { pages, rendered, total, error: renderError } = usePageImages(doc, pageCount);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -648,9 +652,15 @@ export function SendFlow({
                   <p className="font-medium">The document could not be rendered here.</p>
                   <p className="mt-1 text-xs">
                     {renderError} — open the PDF in a new tab from the panel on the left, and
-                    tell me this message so it can be fixed.
+                    send me this message.
                   </p>
                 </Alert>
+              ) : null}
+
+              {doc && rendered < total ? (
+                <p className="mb-3 text-center text-xs text-muted-foreground">
+                  Rendering pages… {rendered} of {total}
+                </p>
               ) : null}
 
               {doc ? (
@@ -666,11 +676,10 @@ export function SendFlow({
                           className="relative mx-auto cursor-crosshair bg-white shadow-sm ring-1 ring-border"
                           style={{ width }}
                         >
-                          <PageCanvas
-                            doc={doc}
+                          <PageImageView
+                            image={pages[pageNumber - 1] ?? null}
                             pageNumber={pageNumber}
-                            cssWidth={width}
-                            onError={setRenderError}
+                            width={width}
                           />
 
                           {fields

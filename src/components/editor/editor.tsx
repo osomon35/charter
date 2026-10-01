@@ -46,7 +46,8 @@ import { clamp01, snapPosition, type Guide } from "@/lib/editor/snapping";
 import { STORAGE_BUCKET } from "@/lib/contracts/types";
 import { placeSignatureOnContract } from "@/lib/signatures/actions";
 import type { SignatureRecord } from "@/lib/signatures/types";
-import { PageCanvas } from "@/components/editor/page-canvas";
+import { usePageImages } from "@/lib/pdf-pages";
+import { PageImageView } from "@/components/editor/page-image";
 import { ElementBox, type DragKind } from "@/components/editor/element-box";
 import { Inspector } from "@/components/editor/inspector";
 import { SignaturePicker } from "@/components/editor/signature-picker";
@@ -97,9 +98,12 @@ export function Editor({
   const [busy, setBusy] = useState(false);
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
 
-  /** Rendered page box in CSS pixels, and the page's true width in points. */
-  const [pageBox, setPageBox] = useState({ width: 0, height: 0 });
-  const [pagePoints, setPagePoints] = useState({ width: 612, height: 792 });
+  const { pages, rendered, total, error: renderError } = usePageImages(doc, pageCount);
+
+  /** The page currently shown, with its pixel and point dimensions. */
+  const current = pages[page - 1] ?? null;
+  const pointWidth = current?.ptWidth ?? 612;
+  const pointHeight = current?.ptHeight ?? 792;
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -135,9 +139,6 @@ export function Editor({
           await opened.destroy();
           return;
         }
-        const first = await opened.getPage(1);
-        const viewport = first.getViewport({ scale: 1 });
-        setPagePoints({ width: viewport.width, height: viewport.height });
         setDoc(opened);
       } catch (err) {
         console.error("editor_open_failed", err);
@@ -190,7 +191,7 @@ export function Editor({
       // 48px of breathing room either side, and never wider than the page's own
       // aspect ratio allows in the available height.
       const available = node.clientWidth - 96;
-      const byHeight = ((node.clientHeight - 96) * pagePoints.width) / pagePoints.height;
+      const byHeight = ((node.clientHeight - 96) * pointWidth) / pointHeight;
       setFitWidth(Math.max(240, Math.min(available, byHeight, 1400)));
     };
 
@@ -198,18 +199,14 @@ export function Editor({
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [pagePoints]);
+  }, [pointWidth, pointHeight]);
 
   const cssWidth = Math.round(fitWidth * zoom);
   // Points to CSS pixels. Font sizes are stored in points, so this is what the
-  // on-screen text has to be multiplied by to match the flattened output.
-  const scale = pageBox.width > 0 ? pageBox.width / pagePoints.width : 1;
-
-  const onPageSize = useCallback((size: { width: number; height: number }) => {
-    setPageBox((current) =>
-      current.width === size.width && current.height === size.height ? current : size,
-    );
-  }, []);
+  // on-screen text has to be multiplied by to match the flattened output. Derived
+  // from the laid-out width rather than measured, now that the page is an image
+  // whose displayed width is exactly what CSS was told.
+  const scale = cssWidth > 0 ? cssWidth / pointWidth : 1;
 
   // --- editing primitives ------------------------------------------------
   const commitElements = useCallback((next: OverlayElement[]) => {
@@ -472,8 +469,8 @@ export function Editor({
 
       if (selectedId && !selectedLocked && event.key.startsWith("Arrow")) {
         event.preventDefault();
-        const step = (event.shiftKey ? 10 : 1) / pagePoints.width;
-        const stepY = (event.shiftKey ? 10 : 1) / pagePoints.height;
+        const step = (event.shiftKey ? 10 : 1) / pointWidth;
+        const stepY = (event.shiftKey ? 10 : 1) / pointHeight;
         const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
         const dy = event.key === "ArrowUp" ? -stepY : event.key === "ArrowDown" ? stepY : 0;
         commitElements(
@@ -488,7 +485,7 @@ export function Editor({
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [deleteSelected, selectedId, elements, commitElements, pagePoints]);
+  }, [deleteSelected, selectedId, elements, commitElements, pointWidth, pointHeight]);
 
   // --- persistence --------------------------------------------------------
   async function save() {
@@ -617,6 +614,19 @@ export function Editor({
         >
           {loadError ? (
             <p className="p-10 text-sm text-destructive">{loadError}</p>
+          ) : renderError ? (
+            <div className="p-10 text-sm">
+              <p className="text-destructive">This document could not be rendered.</p>
+              <p className="mt-1 text-xs text-muted-foreground">{renderError}</p>
+              <a
+                href={`/api/versions/${versionId}/file`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block text-xs underline underline-offset-2"
+              >
+                Open the PDF in a new tab
+              </a>
+            </div>
           ) : !doc ? (
             <p className="p-10 text-sm text-muted-foreground">Opening document…</p>
           ) : (
@@ -630,12 +640,7 @@ export function Editor({
                 )}
                 style={{ width: cssWidth }}
               >
-                <PageCanvas
-                  doc={doc}
-                  pageNumber={page}
-                  cssWidth={cssWidth}
-                  onSize={onPageSize}
-                />
+                <PageImageView image={current} pageNumber={page} width={cssWidth} />
 
                 {onThisPage.map((element) => (
                   <ElementBox
@@ -709,6 +714,8 @@ export function Editor({
         </div>
 
         <span className="text-xs text-muted-foreground">
+          {rendered < total ? `Rendering ${rendered}/${total}` : null}
+          {rendered < total ? " · " : ""}
           {elements.length} element{elements.length === 1 ? "" : "s"}
         </span>
 
