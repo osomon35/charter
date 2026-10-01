@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inspectPdf } from "@/lib/pdf-server";
@@ -47,7 +47,7 @@ export async function beginUpload(input: {
   fileName: string;
   byteSize: number;
 }): Promise<BeginUploadResult> {
-  const owner = await requireOwner();
+  const owner = await requireContractAccess();
 
   const parsed = beginSchema.safeParse(input);
   if (!parsed.success) {
@@ -141,7 +141,7 @@ export async function finalizeUpload(input: {
   versionId: string;
   thumbnailUploaded: boolean;
 }): Promise<FinalizeUploadResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   const parsed = finalizeSchema.safeParse(input);
   if (!parsed.success) {
@@ -220,7 +220,7 @@ async function failVersion(versionId: string, reason: string): Promise<void> {
 
 /** Abandons a contract whose upload never completed. */
 export async function abandonUpload(contractId: string): Promise<void> {
-  await requireOwner();
+  await requireContractAccess();
   if (!z.string().uuid().safeParse(contractId).success) return;
 
   const supabase = await createClient();
@@ -256,7 +256,7 @@ export async function saveContractMetadata(
   _prev: SaveMetadataState,
   formData: FormData,
 ): Promise<SaveMetadataState> {
-  await requireOwner();
+  await requireContractAccess();
 
   const emptyToNull = (value: FormDataEntryValue | null): string | null => {
     const text = typeof value === "string" ? value.trim() : "";
@@ -304,7 +304,7 @@ export async function saveContractMetadata(
 
 /** Soft delete — Phase 6 adds the Trash view and the 30-day purge. */
 export async function softDeleteContract(contractId: string): Promise<void> {
-  await requireOwner();
+  await requireContractAccess();
   if (!z.string().uuid().safeParse(contractId).success) return;
 
   const supabase = await createClient();

@@ -19,13 +19,15 @@ Storage) · pdf-lib · pdf.js · Resend · Vercel.
 | 4 | Reusable signatures and initials | Done |
 | 5 | Recipients, fields, routing, signer flow, audit, certificate | Done |
 | 6 | Folders, tags, search, filters, archive, trash, reminders | Done |
-| 7 | Workspaces, invites, roles | **Not built** |
+| 7a | Members: invites, roles, blocking | Done |
+| 7b | Workspaces (separate libraries per space) | **Not built** |
 
-**What Phase 7 would add:** several workspaces instead of one shared space,
-invites with per-member roles (block, remove, sending rights, self-signature
-only), and a per-workspace icon that doubles as the favicon. Agreed but not
-started — it re-scopes every RLS policy from `is_owner()` to workspace
-membership, so it is a re-architecture rather than an addition.
+**What members can and cannot do:** invites, three roles and blocking are built
+and enforced in RLS — `admin` manages members, `sender` works with contracts,
+`signer` has no contract access at all. What is *not* built is per-person
+visibility: everyone with contract access sees every contract. Separating that
+needs workspaces, which re-scopes every policy again, so invite someone as
+“Signs only” if they should not see the library.
 
 ---
 

@@ -12,6 +12,7 @@ import { notifyRecipient } from "@/lib/envelopes/notify";
 import { completeEnvelope } from "@/lib/envelopes/complete";
 import { sendEmail } from "@/lib/email/resend";
 import { ownerSender } from "@/lib/email/sender";
+import { adminEmails } from "@/lib/members/owner";
 import { declinedNotice } from "@/lib/email/templates";
 import type { FieldType } from "@/lib/envelopes/types";
 
@@ -344,15 +345,16 @@ export async function declineToSign(input: {
     detail: { reason },
   });
 
-  const owner = process.env.OWNER_ALLOWLIST?.split(",")[0]?.trim();
-  if (owner) {
+  // Every admin hears about a decline, not just whoever set the project up.
+  const admins = await adminEmails();
+  if (admins.length > 0) {
     const mail = declinedNotice({
       documentTitle: document.title,
       recipientName: recipient.name,
       reason,
     });
     await sendEmail({
-      to: [owner],
+      to: admins,
       subject: mail.subject,
       html: mail.html,
       text: mail.text,

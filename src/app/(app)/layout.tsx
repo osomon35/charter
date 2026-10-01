@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
 
         <div className="flex-1 px-2.5 py-2">
-          <SidebarNav />
+          <SidebarNav role={owner.role} />
         </div>
 
         <div className="border-t border-border px-2.5 py-3">
@@ -50,7 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </header>
           <div className="overflow-x-auto px-2.5 pb-2">
             <div className="flex w-max gap-1">
-              <SidebarNav />
+              <SidebarNav role={owner.role} />
             </div>
           </div>
         </div>

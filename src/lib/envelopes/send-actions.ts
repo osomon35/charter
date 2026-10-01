@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { publicEnv } from "@/lib/env";
@@ -79,7 +79,7 @@ export type SendResult =
  * worse.
  */
 export async function createAndSendEnvelope(input: unknown): Promise<SendResult> {
-  const owner = await requireOwner();
+  const owner = await requireContractAccess();
 
   const parsed = sendSchema.safeParse(input);
   if (!parsed.success) {
@@ -325,7 +325,7 @@ async function settleSourceVersion(contractId: string): Promise<string | null> {
 export async function nudgeRecipient(
   recipientId: string,
 ): Promise<{ ok: true; url?: string } | { ok: false; error: string }> {
-  const owner = await requireOwner();
+  const owner = await requireContractAccess();
   if (!z.string().uuid().safeParse(recipientId).success) {
     return { ok: false, error: "Invalid request." };
   }
@@ -408,7 +408,7 @@ export async function nudgeRecipient(
 
 /** Cancels an envelope. Existing links stop working immediately. */
 export async function voidEnvelope(envelopeId: string): Promise<void> {
-  const owner = await requireOwner();
+  const owner = await requireContractAccess();
   if (!z.string().uuid().safeParse(envelopeId).success) return;
 
   const supabase = await createClient();
@@ -442,7 +442,7 @@ export async function voidEnvelope(envelopeId: string): Promise<void> {
 export async function getSendPreviewUrl(
   versionId: string,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  await requireOwner();
+  await requireContractAccess();
   if (!z.string().uuid().safeParse(versionId).success) {
     return { ok: false, error: "Invalid request." };
   }

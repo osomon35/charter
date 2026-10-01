@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { parseFilters, hasActiveFilters } from "@/lib/contracts/filters";
 import { listTags, queryContracts, viewCounts } from "@/lib/contracts/dashboard-queries";
 import { PageHeader, EmptyState } from "@/components/shell/page-header";
@@ -33,7 +33,7 @@ export default async function ContractsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireOwner();
+  await requireContractAccess();
 
   const filters = parseFilters(await searchParams);
 

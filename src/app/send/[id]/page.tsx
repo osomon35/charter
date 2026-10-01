@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { getContract } from "@/lib/contracts/queries";
 import { SendFlow } from "@/components/send/send-flow";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 /** Outside the (app) group: field placement wants the full viewport. */
 export default async function SendPage({ params }: { params: Promise<{ id: string }> }) {
-  const owner = await requireOwner();
+  const owner = await requireContractAccess();
   const { id } = await params;
 
   const contract = await getContract(id);

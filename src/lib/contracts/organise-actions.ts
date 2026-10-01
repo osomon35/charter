@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { CONTRACT_STATUSES, TAG_COLORS } from "@/lib/contracts/types";
 
@@ -51,7 +51,7 @@ export async function createTag(input: {
   name: string;
   color: string;
 }): Promise<CreateTagResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   const parsed = z
     .object({
@@ -81,7 +81,7 @@ export async function createTag(input: {
 }
 
 export async function deleteTag(id: string): Promise<ActionResult> {
-  await requireOwner();
+  await requireContractAccess();
   if (!uuid.safeParse(id).success) return fail("Invalid tag.");
 
   const supabase = await createClient();
@@ -98,7 +98,7 @@ export async function setContractTags(input: {
   contractId: string;
   tagIds: string[];
 }): Promise<ActionResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   if (!uuid.safeParse(input.contractId).success) return fail("Invalid contract.");
   const tags = z.array(uuid).max(50).safeParse(input.tagIds);
@@ -126,7 +126,7 @@ export async function setContractStatus(input: {
   contractId: string;
   status: string;
 }): Promise<ActionResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   if (!uuid.safeParse(input.contractId).success) return fail("Invalid contract.");
   const status = z.enum(CONTRACT_STATUSES).safeParse(input.status);
@@ -154,7 +154,7 @@ export async function bulkTag(input: {
   tagId: string;
   add: boolean;
 }): Promise<ActionResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   const ids = uuidList.safeParse(input.contractIds);
   if (!ids.success) return fail("Nothing selected.");
@@ -187,7 +187,7 @@ export async function bulkArchive(input: {
   contractIds: string[];
   archived: boolean;
 }): Promise<ActionResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   const ids = uuidList.safeParse(input.contractIds);
   if (!ids.success) return fail("Nothing selected.");
@@ -205,7 +205,7 @@ export async function bulkArchive(input: {
 
 /** Soft delete. The nightly cron purges anything older than 30 days. */
 export async function bulkDelete(contractIds: string[]): Promise<ActionResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   const ids = uuidList.safeParse(contractIds);
   if (!ids.success) return fail("Nothing selected.");
@@ -222,7 +222,7 @@ export async function bulkDelete(contractIds: string[]): Promise<ActionResult> {
 }
 
 export async function bulkRestore(contractIds: string[]): Promise<ActionResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   const ids = uuidList.safeParse(contractIds);
   if (!ids.success) return fail("Nothing selected.");

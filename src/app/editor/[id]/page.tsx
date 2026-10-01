@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getContract, getSourceVersion } from "@/lib/contracts/queries";
 import { overlaySchema } from "@/lib/editor/schema";
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
  * none of the sidebar — the editor wants the whole viewport.
  */
 export default async function EditorPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireOwner();
+  await requireContractAccess();
   const { id } = await params;
 
   const contract = await getContract(id);

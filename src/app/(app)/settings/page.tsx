@@ -5,19 +5,26 @@ import { PageHeader } from "@/components/shell/page-header";
 import { SignatureCreator } from "@/components/signatures/signature-creator";
 import { SignatureList } from "@/components/signatures/signature-list";
 import { DisplayNameForm } from "@/components/settings/display-name-form";
-import { AccessPanel } from "@/components/settings/access-panel";
-import { getAccessReport } from "@/lib/access/report";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const owner = await requireOwner();
-  const [signatures, access] = await Promise.all([listSignatures(), getAccessReport()]);
+  const signatures = await listSignatures();
 
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title="Settings" description="Your account and signing identity." />
+
+      {owner.role === "signer" ? (
+        <Alert className="mb-6">
+          Your account is set to sign documents only. Signing requests reach you by email, and
+          a signature saved here is offered when you open one. Contracts are not visible to
+          you.
+        </Alert>
+      ) : null}
 
       <div className="space-y-8">
         <Card>
@@ -50,24 +57,10 @@ export default async function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Access</CardTitle>
-            <CardDescription>
-              Everyone who can reach this workspace, and whether the three places that
-              control it agree.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AccessPanel report={access} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle>Account</CardTitle>
             <CardDescription>
-              Your name appears in the From line of signing requests and on the certificate
-              of completion. Access itself is granted by address — to add or remove someone,
-              update the owner_allowlist table and the OWNER_ALLOWLIST variable together.
+              Your name appears in the From line of signing requests and on the certificate of
+              completion.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">

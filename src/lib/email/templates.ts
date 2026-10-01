@@ -168,3 +168,36 @@ export function declinedNotice(input: {
 
   return { subject: `Declined: ${input.documentTitle}`, html, text };
 }
+
+export function memberInvite(input: {
+  name: string;
+  inviterName: string;
+  url: string;
+}): { subject: string; html: string; text: string } {
+  const html = shell(
+    `<p style="margin:0 0 16px 0;">Hello ${escapeHtml(input.name)},</p>
+<p style="margin:0 0 16px 0;">
+${escapeHtml(input.inviterName)} has given you access to Charter, where contracts are
+prepared and sent for signature.
+</p>
+${button(input.url, "Set up your access")}
+<p style="margin:0;color:${MUTED};font-size:13px;">
+This link signs you in and is unique to you — please do not forward it. If it has expired,
+ask ${escapeHtml(input.inviterName)} to send another.
+</p>`,
+    "If you were not expecting this, you can ignore it and no account will be used.",
+  );
+
+  const text = [
+    `Hello ${input.name},`,
+    "",
+    `${input.inviterName} has given you access to Charter, where contracts are prepared and sent for signature.`,
+    "",
+    "Set up your access:",
+    input.url,
+    "",
+    "This link signs you in and is unique to you — please do not forward it.",
+  ].join("\n");
+
+  return { subject: `${input.inviterName} invited you to Charter`, html, text };
+}

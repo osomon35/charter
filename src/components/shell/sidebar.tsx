@@ -2,21 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, LayoutDashboard, Settings } from "lucide-react";
+import { FileText, LayoutDashboard, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/contracts", label: "Contracts", icon: FileText },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, needs: "contracts" },
+  { href: "/contracts", label: "Contracts", icon: FileText, needs: "contracts" },
+  { href: "/members", label: "Members", icon: Users, needs: "admin" },
+  { href: "/settings", label: "Settings", icon: Settings, needs: "any" },
 ] as const;
 
-export function SidebarNav() {
+/**
+ * Navigation reflects the role, so a signer is not shown doors that would turn
+ * them away and an admin's tools are not advertised to everyone. The gate is
+ * still requireAdmin / RLS; this is only about not offering dead ends.
+ */
+export function SidebarNav({ role }: { role: "admin" | "sender" | "signer" }) {
   const pathname = usePathname();
 
   return (
     <nav className="flex flex-row gap-1 md:flex-col md:gap-0.5" aria-label="Main">
-      {NAV.map(({ href, label, icon: Icon }) => {
+      {NAV.filter((entry) =>
+        entry.needs === "any"
+          ? true
+          : entry.needs === "admin"
+            ? role === "admin"
+            : role !== "signer",
+      ).map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, FileText, PenLine, Send } from "lucide-react";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { getContract, listAssignedTagIds, listVersions } from "@/lib/contracts/queries";
 import { listAudit, listEnvelopes } from "@/lib/envelopes/queries";
 import { listTags } from "@/lib/contracts/dashboard-queries";
@@ -22,7 +22,7 @@ export default async function ContractPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireOwner();
+  await requireContractAccess();
   const { id } = await params;
 
   const contract = await getContract(id);

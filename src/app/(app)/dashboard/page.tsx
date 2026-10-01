@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { countByStatus, listContracts } from "@/lib/contracts/queries";
 import { PageHeader, EmptyState } from "@/components/shell/page-header";
 import { ContractCard } from "@/components/contracts/contract-card";
@@ -17,7 +17,7 @@ const TILES = [
 ] as const;
 
 export default async function DashboardPage() {
-  const owner = await requireOwner();
+  const owner = await requireContractAccess();
   const contracts = await listContracts();
   const counts = countByStatus(contracts);
   const firstName = owner.fullName?.split(" ")[0];

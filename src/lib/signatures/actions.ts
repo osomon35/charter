@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess, requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { STORAGE_BUCKET } from "@/lib/contracts/types";
@@ -187,7 +187,7 @@ export async function placeSignatureOnContract(input: {
   contractId: string;
   signatureId: string;
 }): Promise<PlaceSignatureResult> {
-  await requireOwner();
+  await requireContractAccess();
 
   if (!uuid.safeParse(input.contractId).success || !uuid.safeParse(input.signatureId).success) {
     return { ok: false, error: "Invalid request." };

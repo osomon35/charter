@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { primaryAdmin } from "@/lib/members/owner";
 
 /**
  * Who a Charter email appears to come from.
@@ -67,21 +67,7 @@ export function resolveFrom(sender: Sender | null): ResolvedFrom {
  * owner to satisfy RLS.
  */
 export async function ownerSender(): Promise<Sender | null> {
-  const allowlisted = process.env.OWNER_ALLOWLIST?.split(",")[0]?.trim().toLowerCase();
-  if (!allowlisted) return null;
-
-  try {
-    const { data } = await createAdminClient()
-      .from("profiles")
-      .select("email, full_name")
-      .eq("email", allowlisted)
-      .maybeSingle();
-
-    return {
-      name: data?.full_name?.trim() || allowlisted,
-      email: data?.email ?? allowlisted,
-    };
-  } catch {
-    return { name: allowlisted, email: allowlisted };
-  }
+  const admin = await primaryAdmin();
+  if (!admin) return null;
+  return { name: admin.name?.trim() || admin.email, email: admin.email };
 }

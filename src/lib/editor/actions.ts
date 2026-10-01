@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireOwner } from "@/lib/auth";
+import { requireContractAccess } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inspectPdf, sha256Hex } from "@/lib/pdf-server";
@@ -19,7 +19,7 @@ const VIEW_URL_TTL_SECONDS = 900;
 export async function getVersionUrl(
   versionId: string,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  await requireOwner();
+  await requireContractAccess();
   if (!uuid.safeParse(versionId).success) return { ok: false, error: "Invalid request." };
 
   const supabase = await createClient();
@@ -51,7 +51,7 @@ export async function saveOverlay(input: {
   baseVersionId: string;
   elements: unknown;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireOwner();
+  await requireContractAccess();
 
   if (!uuid.safeParse(input.contractId).success || !uuid.safeParse(input.baseVersionId).success) {
     return { ok: false, error: "Invalid request." };
@@ -96,7 +96,7 @@ export async function beginImageUpload(input: {
   contractId: string;
   contentType: string;
 }): Promise<{ ok: true; path: string; token: string } | { ok: false; error: string }> {
-  await requireOwner();
+  await requireContractAccess();
 
   if (!uuid.safeParse(input.contractId).success) {
     return { ok: false, error: "Invalid request." };
@@ -121,7 +121,7 @@ export async function getAssetUrl(
   contractId: string,
   assetPath: string,
 ): Promise<string | null> {
-  await requireOwner();
+  await requireContractAccess();
   if (!uuid.safeParse(contractId).success) return null;
   if (!assetPath.startsWith(`${contractId}/`)) return null;
 
@@ -154,7 +154,7 @@ export async function flattenToNewVersion(input: {
   baseVersionId: string;
   elements: unknown;
 }): Promise<FlattenResult> {
-  const owner = await requireOwner();
+  const owner = await requireContractAccess();
 
   if (!uuid.safeParse(input.contractId).success || !uuid.safeParse(input.baseVersionId).success) {
     return { ok: false, error: "Invalid request." };

@@ -11,6 +11,7 @@ import { embedOne } from "@/lib/supabase/embed";
 import { appendCertificate } from "@/lib/envelopes/certificate";
 import { sendEmail } from "@/lib/email/resend";
 import { ownerSender } from "@/lib/email/sender";
+import { adminEmails } from "@/lib/members/owner";
 import { completedNotice } from "@/lib/email/templates";
 import type { FieldType } from "@/lib/envelopes/types";
 
@@ -246,7 +247,7 @@ export async function completeEnvelope(envelopeId: string): Promise<void> {
   const addresses = [
     ...new Set([
       ...((recipients ?? []) as { email: string }[]).map((r) => r.email),
-      ...(process.env.OWNER_ALLOWLIST?.split(",").map((e) => e.trim().toLowerCase()) ?? []),
+      ...(await adminEmails()),
     ]),
   ].filter(Boolean);
 

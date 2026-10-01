@@ -77,7 +77,7 @@ export async function signInWithPassword(
   }
 
   // Reject non-allowlisted addresses here, before Supabase is involved at all.
-  if (!isAllowlisted(email)) {
+  if (!(await isAllowlisted(email))) {
     return { error: GENERIC_FAILURE, email };
   }
 
@@ -114,7 +114,7 @@ export async function sendMagicLink(
   // Always report the same thing, whether or not we actually sent anything.
   const sentNotice = "Check your inbox — if that address has access, a sign-in link is on its way.";
 
-  if (!isAllowlisted(email)) {
+  if (!(await isAllowlisted(email))) {
     return { notice: sentNotice, email };
   }
 

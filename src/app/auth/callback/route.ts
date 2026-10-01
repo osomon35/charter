@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     return failed;
   }
 
-  if (!isAllowlisted(email)) {
+  if (!(await isAllowlisted(email))) {
     await supabase.auth.signOut();
     return failed;
   }
