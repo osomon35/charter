@@ -391,8 +391,12 @@ export function Editor({
     const startX = event.clientX;
     const startY = event.clientY;
     const origin = { x: target.x, y: target.y, w: target.w, h: target.h };
+    // Captured as a plain value: TypeScript drops the early-return narrowing on
+    // `target` inside the nested pointermove closure, and the page number is all
+    // the closure actually needs.
+    const targetPage = target.page;
     const others = elements.filter(
-      (element) => element.page === target.page && element.id !== id,
+      (element) => element.page === targetPage && element.id !== id,
     );
 
     // Pointer capture keeps the gesture alive when the cursor leaves the box,
@@ -420,7 +424,7 @@ export function Editor({
           next.x = snapped.x;
           next.y = snapped.y;
           setGuides(snapped.guides);
-          setGuidePage(target.page);
+          setGuidePage(targetPage);
         } else {
           setGuides([]);
         }
