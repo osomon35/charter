@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, FileText, PenLine, ShieldCheck } from "lucide-react";
-import { loadPdfjs, type PdfDocument } from "@/lib/pdfjs";
+import { openPdfFromUrl, type PdfDocument } from "@/lib/pdfjs";
 import { usePageImages, type PageImage } from "@/lib/pdf-pages";
 import { PageImageView } from "@/components/editor/page-image";
 import { SignatureCapture } from "@/components/signer/signature-capture";
@@ -90,8 +90,7 @@ export function SignerExperience({
 
     (async () => {
       try {
-        const pdfjs = await loadPdfjs();
-        opened = await pdfjs.getDocument({ url: `/api/sign/${token}/file` }).promise;
+        opened = await openPdfFromUrl(`/api/sign/${token}/file`);
         if (cancelled) {
           await opened.destroy();
           return;

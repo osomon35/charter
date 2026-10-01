@@ -21,9 +21,12 @@ export function PageImageView({
 }) {
   if (!image) {
     return (
+      /* White, not a themed surface: this stands in for a sheet of paper, and in
+         dark mode bg-surface-muted produced a full-page black rectangle that read
+         as a rendering failure. */
       <div
         style={{ width, aspectRatio: "1 / 1.414" }}
-        className="flex items-center justify-center bg-surface-muted text-xs text-muted-foreground"
+        className="flex items-center justify-center bg-white text-xs text-[#6b7280]"
       >
         Rendering page {pageNumber}…
       </div>

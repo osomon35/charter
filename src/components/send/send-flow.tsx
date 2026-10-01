@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, Plus, Send, Trash2, X } from "lucide-react";
-import { loadPdfjs, type PdfDocument } from "@/lib/pdfjs";
+import { openPdfFromUrl, type PdfDocument } from "@/lib/pdfjs";
 import { usePageImages } from "@/lib/pdf-pages";
 import { PageImageView } from "@/components/editor/page-image";
 import { createAndSendEnvelope, getSendPreviewUrl } from "@/lib/envelopes/send-actions";
@@ -107,8 +107,7 @@ export function SendFlow({
         return;
       }
       try {
-        const pdfjs = await loadPdfjs();
-        opened = await pdfjs.getDocument({ url: signed.url }).promise;
+        opened = await openPdfFromUrl(signed.url);
         if (cancelled) {
           await opened.destroy();
           return;

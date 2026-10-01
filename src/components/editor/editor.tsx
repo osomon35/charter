@@ -6,8 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Check,
-  ChevronLeft,
-  ChevronRight,
   CalendarDays,
   Image as ImageIcon,
   Minus,
@@ -17,7 +15,7 @@ import {
   Type,
   Undo2,
 } from "lucide-react";
-import { loadPdfjs, type PdfDocument } from "@/lib/pdfjs";
+import { openPdfFromUrl, type PdfDocument } from "@/lib/pdfjs";
 import { createClient } from "@/lib/supabase/client";
 import {
   beginImageUpload,
@@ -88,12 +86,15 @@ export function Editor({
 
   const [doc, setDoc] = useState<PdfDocument | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
+  // Which page the viewport is mostly showing. Only used to decide where a newly
+  // placed image or signature lands; everything else is per-page already.
+  const [visiblePage, setVisiblePage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [tool, setTool] = useState<Tool>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryState>(() => initHistory(initialElements));
   const [guides, setGuides] = useState<Guide[]>([]);
+  const [guidePage, setGuidePage] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
@@ -101,20 +102,17 @@ export function Editor({
   const { pages, rendered, total, error: renderError } = usePageImages(doc, pageCount);
 
   /** The page currently shown, with its pixel and point dimensions. */
-  const current = pages[page - 1] ?? null;
-  const pointWidth = current?.ptWidth ?? 612;
-  const pointHeight = current?.ptHeight ?? 792;
+  // Page one's dimensions drive fit-to-width and the arrow-key nudge step. Mixed
+  // page sizes in one document are rare enough that a single reference is fine,
+  // and each page's own scale is computed where it is drawn.
+  const pointWidth = pages[0]?.ptWidth ?? 612;
+  const pointHeight = pages[0]?.ptHeight ?? 792;
 
   const viewportRef = useRef<HTMLDivElement>(null);
-  const pageRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const elements = history.present;
   const selected = elements.find((element) => element.id === selectedId) ?? null;
-  const onThisPage = useMemo(
-    () => elements.filter((element) => element.page === page),
-    [elements, page],
-  );
   const lockedCount = useMemo(
     () => elements.filter((element) => element.locked === true).length,
     [elements],
@@ -133,8 +131,7 @@ export function Editor({
         return;
       }
       try {
-        const pdfjs = await loadPdfjs();
-        opened = await pdfjs.getDocument({ url: signed.url }).promise;
+        opened = await openPdfFromUrl(signed.url);
         if (cancelled) {
           await opened.destroy();
           return;
@@ -181,6 +178,27 @@ export function Editor({
     };
   }, [elements, assetUrls, contractId]);
 
+  // Reports the page nearest the top of the viewport, so image and signature
+  // placement lands somewhere the user is actually looking.
+  useEffect(() => {
+    const root = viewportRef.current;
+    if (!root || !doc) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        const attribute = visible?.target.getAttribute("data-page");
+        if (attribute) setVisiblePage(Number(attribute));
+      },
+      { root, threshold: [0.1, 0.5, 0.9] },
+    );
+
+    for (const node of root.querySelectorAll("[data-page]")) observer.observe(node);
+    return () => observer.disconnect();
+  }, [doc, pageCount]);
+
   // --- fit to the viewport, then apply zoom ------------------------------
   const [fitWidth, setFitWidth] = useState(0);
   useEffect(() => {
@@ -188,18 +206,17 @@ export function Editor({
     if (!node) return;
 
     const measure = () => {
-      // 48px of breathing room either side, and never wider than the page's own
-      // aspect ratio allows in the available height.
-      const available = node.clientWidth - 96;
-      const byHeight = ((node.clientHeight - 96) * pointWidth) / pointHeight;
-      setFitWidth(Math.max(240, Math.min(available, byHeight, 1400)));
+      // Width only. Pages now stack and scroll, so constraining to the viewport
+      // height — as a single-page view had to — would shrink every page to fit a
+      // height the column exceeds anyway.
+      setFitWidth(Math.max(240, Math.min(node.clientWidth - 96, 1100)));
     };
 
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [pointWidth, pointHeight]);
+  }, []);
 
   const cssWidth = Math.round(fitWidth * zoom);
   // Points to CSS pixels. Font sizes are stored in points, so this is what the
@@ -268,10 +285,10 @@ export function Editor({
   }, [selected, elements, commitElements]);
 
   // --- placing ------------------------------------------------------------
-  function placeAt(event: React.MouseEvent<HTMLDivElement>) {
-    if (!tool || !pageRef.current) return;
+  function placeAt(event: React.MouseEvent<HTMLDivElement>, pageNumber: number) {
+    if (!tool) return;
 
-    const rect = pageRef.current.getBoundingClientRect();
+    const rect = event.currentTarget.getBoundingClientRect();
     const at = {
       x: clamp01((event.clientX - rect.left) / rect.width),
       y: clamp01((event.clientY - rect.top) / rect.height),
@@ -284,8 +301,8 @@ export function Editor({
 
     const created =
       tool === "date"
-        ? { ...newElement("text", page, at), text: todayLabel() }
-        : newElement(tool, page, at);
+        ? { ...newElement("text", pageNumber, at), text: todayLabel() }
+        : newElement(tool, pageNumber, at);
 
     commitElements([...elements, created as OverlayElement]);
     setSelectedId(created.id);
@@ -313,7 +330,7 @@ export function Editor({
       }
 
       const size = await readImageSize(file);
-      const created = newElement("image", page, { x: 0.1, y: 0.1 }, {
+      const created = newElement("image", visiblePage, { x: 0.1, y: 0.1 }, {
         assetPath: ticket.path,
         naturalWidth: size.width,
         naturalHeight: size.height,
@@ -344,7 +361,7 @@ export function Editor({
         return;
       }
 
-      const created = newElement("image", page, { x: 0.12, y: 0.62 }, {
+      const created = newElement("image", visiblePage, { x: 0.12, y: 0.62 }, {
         assetPath: placed.assetPath,
         naturalWidth: placed.width,
         naturalHeight: placed.height,
@@ -362,14 +379,21 @@ export function Editor({
   // --- drag and resize ----------------------------------------------------
   function startGesture(event: React.PointerEvent, id: string, kind: DragKind) {
     const target = elements.find((element) => element.id === id);
-    if (!target || target.locked === true || !pageRef.current) return;
+    if (!target || target.locked === true) return;
+
+    // The element's own page, not a single shared ref: with every page on screen
+    // at once there is no "current" page to measure against.
+    const pageNode = (event.currentTarget as HTMLElement).closest("[data-page]");
+    if (!pageNode) return;
 
     event.preventDefault();
-    const rect = pageRef.current.getBoundingClientRect();
+    const rect = pageNode.getBoundingClientRect();
     const startX = event.clientX;
     const startY = event.clientY;
     const origin = { x: target.x, y: target.y, w: target.w, h: target.h };
-    const others = elements.filter((element) => element.page === page && element.id !== id);
+    const others = elements.filter(
+      (element) => element.page === target.page && element.id !== id,
+    );
 
     // Pointer capture keeps the gesture alive when the cursor leaves the box,
     // which happens constantly when resizing from a small handle.
@@ -396,6 +420,7 @@ export function Editor({
           next.x = snapped.x;
           next.y = snapped.y;
           setGuides(snapped.guides);
+          setGuidePage(target.page);
         } else {
           setGuides([]);
         }
@@ -419,6 +444,7 @@ export function Editor({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       setGuides([]);
+      setGuidePage(null);
       // One undo step per gesture, recorded at the end.
       setHistory((current) =>
         commit(
@@ -630,46 +656,70 @@ export function Editor({
           ) : !doc ? (
             <p className="p-10 text-sm text-muted-foreground">Opening document…</p>
           ) : (
-            <div className="flex min-h-full items-start justify-center p-12">
-              <div
-                ref={pageRef}
-                onClick={placeAt}
-                className={cn(
-                  "relative shadow-sm ring-1 ring-border",
-                  tool ? "cursor-crosshair" : "cursor-default",
-                )}
-                style={{ width: cssWidth }}
-              >
-                <PageImageView image={current} pageNumber={page} width={cssWidth} />
+            <div className="flex min-h-full flex-col items-center gap-8 p-12">
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => {
+                const image = pages[pageNumber - 1] ?? null;
+                // Per page, because a document can mix page sizes and the font
+                // scale has to match the page the text actually sits on.
+                const pageScale = image ? cssWidth / image.ptWidth : scale;
 
-                {onThisPage.map((element) => (
-                  <ElementBox
-                    key={element.id}
-                    element={element}
-                    selected={element.id === selectedId}
-                    scale={scale}
-                    imageUrl={
-                      element.type === "image" ? assetUrls[element.assetPath] : undefined
-                    }
-                    onSelect={() => setSelectedId(element.id)}
-                    onPointerDownOn={(event, kind) => startGesture(event, element.id, kind)}
-                    onTextChange={(text) => setText(element.id, text)}
-                  />
-                ))}
+                return (
+                  <div key={pageNumber} className="shrink-0">
+                    <p className="mb-1.5 text-center text-[11px] tabular-nums text-muted-foreground">
+                      Page {pageNumber} of {pageCount}
+                    </p>
+                    <div
+                      data-page={pageNumber}
+                      onClick={(event) => placeAt(event, pageNumber)}
+                      className={cn(
+                        "relative bg-white shadow-sm ring-1 ring-border",
+                        tool ? "cursor-crosshair" : "cursor-default",
+                      )}
+                      style={{ width: cssWidth }}
+                    >
+                      <PageImageView
+                        image={image}
+                        pageNumber={pageNumber}
+                        width={cssWidth}
+                      />
 
-                {guides.map((guide, index) => (
-                  <span
-                    key={`${guide.axis}-${index}`}
-                    aria-hidden
-                    className="pointer-events-none absolute bg-primary/70"
-                    style={
-                      guide.axis === "x"
-                        ? { left: `${guide.at * 100}%`, top: 0, bottom: 0, width: 1 }
-                        : { top: `${guide.at * 100}%`, left: 0, right: 0, height: 1 }
-                    }
-                  />
-                ))}
-              </div>
+                      {elements
+                        .filter((element) => element.page === pageNumber)
+                        .map((element) => (
+                          <ElementBox
+                            key={element.id}
+                            element={element}
+                            selected={element.id === selectedId}
+                            scale={pageScale}
+                            imageUrl={
+                              element.type === "image" ? assetUrls[element.assetPath] : undefined
+                            }
+                            onSelect={() => setSelectedId(element.id)}
+                            onPointerDownOn={(event, kind) =>
+                              startGesture(event, element.id, kind)
+                            }
+                            onTextChange={(text) => setText(element.id, text)}
+                          />
+                        ))}
+
+                      {guidePage === pageNumber
+                        ? guides.map((guide, index) => (
+                            <span
+                              key={`${guide.axis}-${index}`}
+                              aria-hidden
+                              className="pointer-events-none absolute bg-primary/70"
+                              style={
+                                guide.axis === "x"
+                                  ? { left: `${guide.at * 100}%`, top: 0, bottom: 0, width: 1 }
+                                  : { top: `${guide.at * 100}%`, left: 0, right: 0, height: 1 }
+                              }
+                            />
+                          ))
+                        : null}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -689,29 +739,9 @@ export function Editor({
 
       {/* --- bottom bar --- */}
       <footer className="flex h-12 shrink-0 items-center justify-between gap-4 border-t border-border px-4">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page <= 1}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
-            title="Previous page"
-          >
-            <ChevronLeft className="size-4" aria-hidden />
-          </button>
-          <span className="min-w-20 text-center text-xs tabular-nums text-muted-foreground">
-            Page {page} / {pageCount}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-            disabled={page >= pageCount}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
-            title="Next page"
-          >
-            <ChevronRight className="size-4" aria-hidden />
-          </button>
-        </div>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          Page {visiblePage} of {pageCount}
+        </span>
 
         <span className="text-xs text-muted-foreground">
           {rendered < total ? `Rendering ${rendered}/${total}` : null}

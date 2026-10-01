@@ -31,3 +31,32 @@ export function loadPdfjs(): Promise<Pdfjs> {
 export type PdfDocument = Awaited<ReturnType<Pdfjs["getDocument"]>["promise"]>;
 export type PdfPage = Awaited<ReturnType<PdfDocument["getPage"]>>;
 export type PdfRenderTask = ReturnType<PdfPage["render"]>;
+
+/**
+ * Opens a PDF from a URL by fetching the bytes first.
+ *
+ * Deliberately not `getDocument({ url })`. That makes pdf.js fetch the file
+ * itself using HTTP range requests, and against Supabase Storage the initial
+ * request succeeds — so getDocument resolves and the document looks open — while
+ * the subsequent range reads never complete, because the CORS response does not
+ * expose the headers pdf.js needs. The result is a document whose pages hang
+ * forever in render() with no error anywhere.
+ *
+ * One plain fetch and `{ data }` is the path the contract thumbnails already use,
+ * and the only one that has ever worked here. A contract PDF is capped at 50 MB,
+ * so holding it in memory is not a concern.
+ */
+export async function openPdfFromUrl(url: string): Promise<PdfDocument> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Could not fetch the document (${response.status})`);
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength === 0) {
+    throw new Error("The document came back empty");
+  }
+
+  const pdfjs = await loadPdfjs();
+  return await pdfjs.getDocument({ data: bytes }).promise;
+}
