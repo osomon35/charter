@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { PdfDocument } from "@/lib/pdfjs";
+import { openPdfFromUrl, type PdfDocument } from "@/lib/pdfjs";
 
 /**
  * Renders every page of a PDF to a PNG once, then displays them as images.
@@ -141,4 +141,67 @@ async function renderPage(doc: PdfDocument, pageNumber: number): Promise<PageIma
     ptWidth: unscaled.width,
     ptHeight: unscaled.height,
   };
+}
+
+/**
+ * Opens a PDF and keeps it alive for as long as `key` is unchanged.
+ *
+ * This exists because getting it wrong is subtle and was costly. The previous
+ * version of this logic lived inline in each screen, and the send flow's copy had
+ * `doc` in its own dependency array — the state the effect sets. So: open the
+ * document, setDoc, `doc` changes, the effect re-runs, and its cleanup destroys
+ * the document that was just opened. Every later getPage() then hangs forever
+ * against a destroyed document, with nothing thrown and nothing logged.
+ *
+ * The rule the hook enforces: the effect that opens a resource must never depend
+ * on the state it stores that resource in. `key` is the only trigger, and the
+ * resolver is read from a ref so an inline arrow cannot retrigger it either.
+ */
+export function usePdfDocument(
+  key: string | null,
+  resolveUrl: () => Promise<string>,
+): { doc: PdfDocument | null; error: string | null } {
+  const [doc, setDoc] = useState<PdfDocument | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const resolver = useRef(resolveUrl);
+  resolver.current = resolveUrl;
+
+  useEffect(() => {
+    if (!key) return;
+
+    let cancelled = false;
+    let opened: PdfDocument | null = null;
+
+    setDoc(null);
+    setError(null);
+
+    (async () => {
+      try {
+        const url = await resolver.current();
+        const document = await openPdfFromUrl(url);
+
+        if (cancelled) {
+          void document.destroy();
+          return;
+        }
+
+        opened = document;
+        setDoc(document);
+      } catch (err) {
+        if (cancelled) return;
+        const message =
+          err instanceof Error ? err.message : "The document could not be opened";
+        console.error("pdf_open_failed", { key, message });
+        setError(message);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      void opened?.destroy();
+    };
+  }, [key]);
+
+  return { doc, error };
 }

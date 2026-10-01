@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, Plus, Send, Trash2, X } from "lucide-react";
-import { openPdfFromUrl, type PdfDocument } from "@/lib/pdfjs";
-import { usePageImages } from "@/lib/pdf-pages";
+import { usePageImages, usePdfDocument } from "@/lib/pdf-pages";
 import { PageImageView } from "@/components/editor/page-image";
 import { createAndSendEnvelope, getSendPreviewUrl } from "@/lib/envelopes/send-actions";
 import {
@@ -72,7 +71,6 @@ export function SendFlow({
   const [tool, setTool] = useState<FieldType>("signature");
   const [selfSigning, setSelfSigning] = useState(false);
 
-  const [doc, setDoc] = useState<PdfDocument | null>(null);
   const [width, setWidth] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,11 +78,22 @@ export function SendFlow({
 
   const [links, setLinks] = useState<{ email: string; url: string }[]>([]);
 
+  // --- document ------------------------------------------------------------
+  // Opened only once the fields step is reached, and owned by the hook — see
+  // usePdfDocument for why this must not live inline.
+  const { doc, error: openError } = usePdfDocument(
+    step === "fields" ? versionId : null,
+    async () => {
+      const signed = await getSendPreviewUrl(versionId);
+      if (!signed.ok) throw new Error(signed.error);
+      return signed.url;
+    },
+  );
+
   // Rendered once per page, up front, then displayed as images — see usePageImages.
   const { pages, rendered, total, error: renderError } = usePageImages(doc, pageCount);
 
   const viewportRef = useRef<HTMLDivElement>(null);
-  const pageRef = useRef<HTMLDivElement>(null);
   // A ref, not the busy state: setBusy does not take effect until the next
   // render, so a fast second click would otherwise slip past a disabled button.
   const sending = useRef(false);
@@ -94,36 +103,7 @@ export function SendFlow({
   // produces no click and a flag would stay set and eat the next real one.
   const dragEndedAt = useRef(0);
 
-  // --- document ------------------------------------------------------------
-  useEffect(() => {
-    if (step !== "fields" || doc) return;
-    let cancelled = false;
-    let opened: PdfDocument | null = null;
 
-    (async () => {
-      const signed = await getSendPreviewUrl(versionId);
-      if (!signed.ok) {
-        setError(signed.error);
-        return;
-      }
-      try {
-        opened = await openPdfFromUrl(signed.url);
-        if (cancelled) {
-          await opened.destroy();
-          return;
-        }
-        setDoc(opened);
-      } catch (err) {
-        console.error("send_preview_failed", err);
-        setError("The document could not be opened.");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      void opened?.destroy();
-    };
-  }, [step, doc, versionId]);
 
   useEffect(() => {
     const node = viewportRef.current;
@@ -646,6 +626,13 @@ export function SendFlow({
               style={{ scrollbarGutter: "stable" }}
               className="min-w-0 flex-1 overflow-y-auto bg-surface-muted p-8"
             >
+              {openError ? (
+                <Alert tone="error" className="mb-4">
+                  <p className="font-medium">The document could not be opened.</p>
+                  <p className="mt-1 text-xs">{openError}</p>
+                </Alert>
+              ) : null}
+
               {renderError ? (
                 <Alert tone="error" className="mb-4">
                   <p className="font-medium">The document could not be rendered here.</p>

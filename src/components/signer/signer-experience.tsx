@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, FileText, PenLine, ShieldCheck } from "lucide-react";
-import { openPdfFromUrl, type PdfDocument } from "@/lib/pdfjs";
-import { usePageImages, type PageImage } from "@/lib/pdf-pages";
+import { usePageImages, usePdfDocument, type PageImage } from "@/lib/pdf-pages";
 import { PageImageView } from "@/components/editor/page-image";
 import { SignatureCapture } from "@/components/signer/signature-capture";
 import {
@@ -76,37 +75,16 @@ export function SignerExperience({
   const [declining, setDeclining] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
 
-  const [doc, setDoc] = useState<PdfDocument | null>(null);
   const [pageWidth, setPageWidth] = useState(0);
+  // --- open the document ---------------------------------------------------
+  const { doc, error: openError } = usePdfDocument(token, async () => `/api/sign/${token}/file`);
+
   const { pages, rendered, total, error: renderError } = usePageImages(doc, pageCount);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
 
-  // --- open the document ---------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-    let opened: PdfDocument | null = null;
 
-    (async () => {
-      try {
-        opened = await openPdfFromUrl(`/api/sign/${token}/file`);
-        if (cancelled) {
-          await opened.destroy();
-          return;
-        }
-        setDoc(opened);
-      } catch (err) {
-        console.error("signer_open_failed", err);
-        setError("The document could not be loaded. Please reload the page.");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      void opened?.destroy();
-    };
-  }, [token]);
 
   // Record the view once, for the audit trail.
   useEffect(() => {
@@ -352,7 +330,12 @@ export function SignerExperience({
               </div>
             )}
 
-          {renderError ? (
+          {openError ? (
+            <Alert tone="error">
+              This document could not be loaded. Open it with the link above to read it, and
+              contact the sender if the problem persists.
+            </Alert>
+          ) : renderError ? (
             <Alert tone="error">
               Part of this document could not be displayed here. Open it with the link above
               before signing.

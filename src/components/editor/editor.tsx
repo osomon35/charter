@@ -15,7 +15,6 @@ import {
   Type,
   Undo2,
 } from "lucide-react";
-import { openPdfFromUrl, type PdfDocument } from "@/lib/pdfjs";
 import { createClient } from "@/lib/supabase/client";
 import {
   beginImageUpload,
@@ -44,7 +43,7 @@ import { clamp01, snapPosition, type Guide } from "@/lib/editor/snapping";
 import { STORAGE_BUCKET } from "@/lib/contracts/types";
 import { placeSignatureOnContract } from "@/lib/signatures/actions";
 import type { SignatureRecord } from "@/lib/signatures/types";
-import { usePageImages } from "@/lib/pdf-pages";
+import { usePageImages, usePdfDocument } from "@/lib/pdf-pages";
 import { PageImageView } from "@/components/editor/page-image";
 import { ElementBox, type DragKind } from "@/components/editor/element-box";
 import { Inspector } from "@/components/editor/inspector";
@@ -84,8 +83,6 @@ export function Editor({
 }) {
   const router = useRouter();
 
-  const [doc, setDoc] = useState<PdfDocument | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   // Which page the viewport is mostly showing. Only used to decide where a newly
   // placed image or signature lands; everything else is per-page already.
   const [visiblePage, setVisiblePage] = useState(1);
@@ -99,9 +96,15 @@ export function Editor({
   const [busy, setBusy] = useState(false);
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
 
+  // --- open the document -------------------------------------------------
+  const { doc, error: loadError } = usePdfDocument(versionId, async () => {
+    const signed = await getVersionUrl(versionId);
+    if (!signed.ok) throw new Error(signed.error);
+    return signed.url;
+  });
+
   const { pages, rendered, total, error: renderError } = usePageImages(doc, pageCount);
 
-  /** The page currently shown, with its pixel and point dimensions. */
   // Page one's dimensions drive fit-to-width and the arrow-key nudge step. Mixed
   // page sizes in one document are rare enough that a single reference is fine,
   // and each page's own scale is computed where it is drawn.
@@ -119,35 +122,7 @@ export function Editor({
   );
 
 
-  // --- open the document -------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-    let opened: PdfDocument | null = null;
 
-    (async () => {
-      const signed = await getVersionUrl(versionId);
-      if (!signed.ok) {
-        setLoadError(signed.error);
-        return;
-      }
-      try {
-        opened = await openPdfFromUrl(signed.url);
-        if (cancelled) {
-          await opened.destroy();
-          return;
-        }
-        setDoc(opened);
-      } catch (err) {
-        console.error("editor_open_failed", err);
-        setLoadError("This document could not be opened for editing.");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      void opened?.destroy();
-    };
-  }, [versionId]);
 
   // --- resolve signed URLs for placed images -----------------------------
   useEffect(() => {
