@@ -5,6 +5,7 @@ import { countByStatus, listContracts } from "@/lib/contracts/queries";
 import { PageHeader, EmptyState } from "@/components/shell/page-header";
 import { ContractCard } from "@/components/contracts/contract-card";
 import { Card, CardContent } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -16,7 +17,12 @@ const TILES = [
   { status: "completed", label: "Completed" },
 ] as const;
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   const owner = await requireContractAccess();
   const contracts = await listContracts();
   const counts = countByStatus(contracts);
@@ -34,6 +40,12 @@ export default async function DashboardPage() {
           </Link>
         }
       />
+
+      {error === "admin_only" ? (
+        <Alert tone="error" className="mb-6">
+          Managing members is only available to admins.
+        </Alert>
+      ) : null}
 
       <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {TILES.map(({ status, label }) => (

@@ -25,7 +25,9 @@ function safeNext(value: string | null): string {
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const next = safeNext(searchParams.get("next"));
-  const failed = NextResponse.redirect(new URL("/login?error=link_invalid", origin));
+  const fail = (reason: string) =>
+    NextResponse.redirect(new URL(`/login?error=${reason}`, origin));
+  const failed = fail("link_invalid");
 
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
@@ -35,16 +37,27 @@ export async function GET(request: NextRequest) {
 
   let email: string | undefined;
 
-  if (code) {
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) return failed;
-    email = data.user?.email ?? undefined;
-  } else if (tokenHash && type && OTP_TYPES.has(type as EmailOtpType)) {
+  if (tokenHash && type && OTP_TYPES.has(type as EmailOtpType)) {
+    // Preferred, and the only form invite links take: verifyOtp needs nothing
+    // stored in the browser beforehand.
     const { data, error } = await supabase.auth.verifyOtp({
       type: type as EmailOtpType,
       token_hash: tokenHash,
     });
-    if (error) return failed;
+    if (error) {
+      console.error("verify_otp_failed", { type, message: error.message });
+      return fail(type === "invite" ? "invite_invalid" : "link_invalid");
+    }
+    email = data.user?.email ?? undefined;
+  } else if (code) {
+    // A PKCE code only works when this browser started the flow, because the
+    // verifier lives in a cookie it set. That is true of a magic link requested
+    // from the login page, and never true of an admin-generated invite.
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.error("exchange_code_failed", { message: error.message });
+      return failed;
+    }
     email = data.user?.email ?? undefined;
   } else {
     return failed;

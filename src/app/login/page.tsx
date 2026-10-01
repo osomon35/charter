@@ -10,6 +10,10 @@ export const metadata: Metadata = {
 const ERRORS: Record<string, string> = {
   not_permitted: "That account no longer has access.",
   link_invalid: "That sign-in link has expired or was already used.",
+  invite_invalid:
+    "That invite link has expired or was already used. Ask whoever invited you to send another.",
+  admin_only: "That page is only available to admins.",
+  signer_only: "Your account is set up to sign documents only.",
 };
 
 export default async function LoginPage({

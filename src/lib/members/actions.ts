@@ -23,6 +23,28 @@ import { MEMBER_ROLES } from "@/lib/members/types";
  */
 const emailSchema = z.string().trim().toLowerCase().email().max(320);
 
+/**
+ * Builds the link we actually send, from the hashed token rather than Supabase's
+ * own action_link.
+ *
+ * action_link routes through Supabase's verify endpoint, which then hands back
+ * either a PKCE `code` or an `#access_token` fragment. Neither works here: the code
+ * needs a verifier cookie from the browser that *started* the flow, and this flow
+ * started on the server through the admin API, so that cookie does not exist. The
+ * fragment never reaches the server at all. Both end as "that sign-in link has
+ * expired or was already used", which is what the callback says when it finds
+ * neither credential it can use.
+ *
+ * hashed_token goes straight to verifyOtp, which needs nothing stored anywhere.
+ */
+function buildInviteUrl(hashedToken: string, type: "invite" | "magiclink", next: string): string {
+  const url = new URL("/auth/callback", publicEnv.appUrl);
+  url.searchParams.set("token_hash", hashedToken);
+  url.searchParams.set("type", type);
+  url.searchParams.set("next", next);
+  return url.toString();
+}
+
 export type MemberResult =
   | { ok: true; inviteUrl?: string; warning?: string }
   | { ok: false; error: string };
@@ -74,16 +96,16 @@ export async function inviteMember(input: {
     options: { redirectTo: `${publicEnv.appUrl}/auth/callback` },
   });
 
-  if (linkError || !link?.properties?.action_link) {
+  if (linkError || !link?.properties?.hashed_token) {
     // The roster entry stands; they simply have no link yet. Say so rather than
     // rolling back, because removing them would lose the role just chosen.
     return {
       ok: true,
-      warning: `Added, but the invite link could not be created: ${linkError?.message ?? "unknown"}. Use Resend invite again once that is resolved.`,
+      warning: `Added, but the invite link could not be created: ${linkError?.message ?? "unknown"}. Use Resend once that is resolved.`,
     };
   }
 
-  const inviteUrl = link.properties.action_link;
+  const inviteUrl = buildInviteUrl(link.properties.hashed_token, "invite", "/welcome");
 
   const mail = memberInvite({
     name: name || email,
@@ -138,11 +160,15 @@ export async function resendInvite(email: string): Promise<MemberResult> {
     options: { redirectTo: `${publicEnv.appUrl}/auth/callback` },
   });
 
-  if (linkError || !link?.properties?.action_link) {
+  if (linkError || !link?.properties?.hashed_token) {
     return { ok: false, error: `Could not create a link: ${linkError?.message ?? "unknown"}` };
   }
 
-  const inviteUrl = link.properties.action_link;
+  const inviteUrl = buildInviteUrl(
+    link.properties.hashed_token,
+    hasAccount ? "magiclink" : "invite",
+    hasAccount ? "/dashboard" : "/welcome",
+  );
 
   const mail = memberInvite({
     name: member.name || parsed.data,
