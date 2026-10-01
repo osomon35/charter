@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Send, Trash2, X } from "lucide-react";
+import { ArrowLeft, ExternalLink, Plus, Send, Trash2, X } from "lucide-react";
 import { loadPdfjs, type PdfDocument } from "@/lib/pdfjs";
 import { PageCanvas } from "@/components/editor/page-canvas";
 import { createAndSendEnvelope, getSendPreviewUrl } from "@/lib/envelopes/send-actions";
@@ -76,6 +76,7 @@ export function SendFlow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [renderError, setRenderError] = useState<string | null>(null);
   const [links, setLinks] = useState<{ email: string; url: string }[]>([]);
 
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -377,7 +378,15 @@ export function SendFlow({
         )}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* Only scroll here outside the field step. Nesting this scroller inside
+          the step's own meant the inner column's width changed when the outer
+          scrollbar appeared, which restarted every page render. */}
+      <div
+        className={cn(
+          "min-h-0 flex-1",
+          step === "fields" ? "overflow-hidden" : "overflow-y-auto",
+        )}
+      >
         {error ? (
           <div className="mx-auto max-w-2xl px-6 pt-6">
             <Alert tone="error">{error}</Alert>
@@ -558,6 +567,19 @@ export function SendFlow({
         {step === "fields" ? (
           <div className="flex h-full min-h-0">
             <div className="w-56 shrink-0 overflow-y-auto border-r border-border bg-surface p-3">
+              {/* Always present, not only on failure: placing fields against a
+                  document you cannot read is the worst case here, and one click to
+                  the real PDF removes that possibility entirely. */}
+              <a
+                href={`/api/versions/${versionId}/file`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-4 flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="size-3 shrink-0" aria-hidden />
+                Open PDF in a new tab
+              </a>
+
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Placing for
               </p>
@@ -621,6 +643,16 @@ export function SendFlow({
               style={{ scrollbarGutter: "stable" }}
               className="min-w-0 flex-1 overflow-y-auto bg-surface-muted p-8"
             >
+              {renderError ? (
+                <Alert tone="error" className="mb-4">
+                  <p className="font-medium">The document could not be rendered here.</p>
+                  <p className="mt-1 text-xs">
+                    {renderError} — open the PDF in a new tab from the panel on the left, and
+                    tell me this message so it can be fixed.
+                  </p>
+                </Alert>
+              ) : null}
+
               {doc ? (
                 <div className="mx-auto flex flex-col items-center gap-6">
                   {Array.from({ length: pageCount }, (_, index) => index + 1).map(
@@ -634,7 +666,12 @@ export function SendFlow({
                           className="relative mx-auto cursor-crosshair bg-white shadow-sm ring-1 ring-border"
                           style={{ width }}
                         >
-                          <PageCanvas doc={doc} pageNumber={pageNumber} cssWidth={width} />
+                          <PageCanvas
+                            doc={doc}
+                            pageNumber={pageNumber}
+                            cssWidth={width}
+                            onError={setRenderError}
+                          />
 
                           {fields
                             .filter((field) => field.page === pageNumber)

@@ -249,6 +249,19 @@ export function SignerExperience({
           </Alert>
         ) : null}
 
+        <p className="mb-4 text-xs text-muted-foreground">
+          Trouble reading it here?{" "}
+          <a
+            href={`/api/sign/${token}/file`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Open the PDF in a new tab
+          </a>
+          .
+        </p>
+
         {senderMessage ? (
           <div className="mb-6 rounded-lg border border-border bg-surface p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -305,6 +318,11 @@ export function SignerExperience({
                   pageNumber={pageNumber}
                   width={pageWidth}
                   interactive={phase === "filling"}
+                  onRenderError={() =>
+                    setError(
+                      "Part of this document could not be displayed. Open it with the link below before signing.",
+                    )
+                  }
                   fields={fields.filter((field) => field.page === pageNumber)}
                   values={values}
                   activeId={activeId}
@@ -441,6 +459,7 @@ function SignerPage({
   pageNumber,
   width,
   interactive,
+  onRenderError,
   fields,
   values,
   activeId,
@@ -453,6 +472,7 @@ function SignerPage({
   pageNumber: number;
   width: number;
   interactive: boolean;
+  onRenderError: (message: string) => void;
   fields: SignerField[];
   values: Record<string, Filled>;
   activeId: string | null;
@@ -466,7 +486,12 @@ function SignerPage({
       className="relative mx-auto overflow-hidden rounded-lg border border-border bg-white shadow-sm"
       style={{ width: width || undefined }}
     >
-      <PageCanvas doc={doc} pageNumber={pageNumber} cssWidth={width} />
+      <PageCanvas
+        doc={doc}
+        pageNumber={pageNumber}
+        cssWidth={width}
+        onError={onRenderError}
+      />
 
       {fields.map((field) => {
         const value = values[field.id] ?? {};
