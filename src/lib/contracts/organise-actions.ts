@@ -20,11 +20,19 @@ const uuidList = z.array(uuid).min(1).max(500);
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-function ok(): ActionResult {
+/**
+ * Narrow return types, not the union.
+ *
+ * Typed as ActionResult, fail() could not be returned from an action with a
+ * richer success shape — createTag returns the new id, and the union's bare
+ * `{ ok: true }` is not assignable to that. The precise types are assignable
+ * everywhere the union is.
+ */
+function ok(): { ok: true } {
   return { ok: true };
 }
 
-function fail(error: string): ActionResult {
+function fail(error: string): { ok: false; error: string } {
   return { ok: false, error };
 }
 
