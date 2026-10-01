@@ -5,13 +5,15 @@ import { PageHeader } from "@/components/shell/page-header";
 import { SignatureCreator } from "@/components/signatures/signature-creator";
 import { SignatureList } from "@/components/signatures/signature-list";
 import { DisplayNameForm } from "@/components/settings/display-name-form";
+import { AccessPanel } from "@/components/settings/access-panel";
+import { getAccessReport } from "@/lib/access/report";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const owner = await requireOwner();
-  const signatures = await listSignatures();
+  const [signatures, access] = await Promise.all([listSignatures(), getAccessReport()]);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -43,6 +45,19 @@ export default async function SettingsPage() {
           </CardHeader>
           <CardContent className="p-0">
             <SignatureList signatures={signatures} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Access</CardTitle>
+            <CardDescription>
+              Everyone who can reach this workspace, and whether the three places that
+              control it agree.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AccessPanel report={access} />
           </CardContent>
         </Card>
 
