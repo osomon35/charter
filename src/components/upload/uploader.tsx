@@ -32,7 +32,7 @@ const STATUS_TEXT: Record<ItemStatus, string> = {
 
 let keySeed = 0;
 
-export function Uploader() {
+export function Uploader({ compact = false }: { compact?: boolean } = {}) {
   const router = useRouter();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -172,54 +172,70 @@ export function Uploader() {
 
   return (
     <div className="space-y-4">
-      <div
-        onDragEnter={(event) => {
-          event.preventDefault();
-          dragDepth.current += 1;
-          setDragging(true);
-        }}
-        onDragOver={(event) => event.preventDefault()}
-        onDragLeave={(event) => {
-          event.preventDefault();
-          dragDepth.current -= 1;
-          if (dragDepth.current <= 0) {
-            dragDepth.current = 0;
-            setDragging(false);
-          }
-        }}
-        onDrop={onDrop}
-        className={cn(
-          "rounded-lg border border-dashed px-6 py-12 text-center transition-colors",
-          dragging
-            ? "border-primary bg-primary-subtle"
-            : "border-border-strong bg-surface-muted",
-        )}
-      >
-        <Upload className="mx-auto mb-3 size-5 text-muted-foreground" aria-hidden />
-        <p className="text-[15px] font-medium">Drop PDFs here</p>
-        <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
-          Or choose files from your computer. Up to 50 MB each.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-4"
-          onClick={() => inputRef.current?.click()}
-        >
-          Choose files
-        </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="application/pdf,.pdf"
-          multiple
-          hidden
-          onChange={(event) => {
-            if (event.target.files) accept(event.target.files);
-            event.target.value = "";
+      {/* Compact mode is a button plus the drop target folded into the page
+          itself, rather than a large dashed box standing between the toolbar and
+          the list. Files dropped anywhere on the list still upload. */}
+      {compact ? (
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+            <Upload aria-hidden />
+            Upload PDFs
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Or drop them anywhere on this page. Up to 50 MB each.
+          </span>
+        </div>
+      ) : (
+        <div
+          onDragEnter={(event) => {
+            event.preventDefault();
+            dragDepth.current += 1;
+            setDragging(true);
           }}
-        />
-      </div>
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            dragDepth.current -= 1;
+            if (dragDepth.current <= 0) {
+              dragDepth.current = 0;
+              setDragging(false);
+            }
+          }}
+          onDrop={onDrop}
+          className={cn(
+            "rounded-lg border border-dashed px-6 py-12 text-center transition-colors",
+            dragging
+              ? "border-primary bg-primary-subtle"
+              : "border-border-strong bg-surface-muted",
+          )}
+        >
+          <Upload className="mx-auto mb-3 size-5 text-muted-foreground" aria-hidden />
+          <p className="text-[15px] font-medium">Drop PDFs here</p>
+          <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
+            Or choose files from your computer. Up to 50 MB each.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={() => inputRef.current?.click()}
+          >
+            Choose files
+          </Button>
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        multiple
+        hidden
+        onChange={(event) => {
+          if (event.target.files) accept(event.target.files);
+          event.target.value = "";
+        }}
+      />
 
       {items.length > 0 ? (
         <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">

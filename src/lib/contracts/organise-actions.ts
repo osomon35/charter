@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { TAG_COLORS } from "@/lib/contracts/types";
+import { CONTRACT_STATUSES, TAG_COLORS } from "@/lib/contracts/types";
 
 /**
  * Folders, tags, and bulk operations.
@@ -128,10 +128,12 @@ export async function deleteFolder(id: string): Promise<ActionResult> {
 // Tags
 // ---------------------------------------------------------------------------
 
+export type CreateTagResult = { ok: true; id: string } | { ok: false; error: string };
+
 export async function createTag(input: {
   name: string;
   color: string;
-}): Promise<ActionResult> {
+}): Promise<CreateTagResult> {
   await requireOwner();
 
   const parsed = z
@@ -144,17 +146,21 @@ export async function createTag(input: {
   if (!parsed.success) return fail("Give the tag a name and a colour.");
 
   const supabase = await createClient();
-  const { error } = await supabase.from("tags").insert(parsed.data);
+  const { data, error } = await supabase
+    .from("tags")
+    .insert(parsed.data)
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !data) {
     // A unique index on lower(name) enforces this; the raw message is unhelpful.
-    if (error.code === "23505") return fail("A tag with that name already exists.");
-    return fail(`Could not create the tag: ${error.message}`);
+    if (error?.code === "23505") return fail("A tag with that name already exists.");
+    return fail(`Could not create the tag: ${error?.message ?? "unknown"}`);
   }
 
   refresh();
   revalidatePath("/settings");
-  return ok();
+  return { ok: true, id: data.id };
 }
 
 export async function deleteTag(id: string): Promise<ActionResult> {
@@ -193,6 +199,29 @@ export async function setContractTags(input: {
     );
     if (error) return fail(`Could not save tags: ${error.message}`);
   }
+
+  refresh();
+  revalidatePath(`/contracts/${input.contractId}`);
+  return ok();
+}
+
+export async function setContractStatus(input: {
+  contractId: string;
+  status: string;
+}): Promise<ActionResult> {
+  await requireOwner();
+
+  if (!uuid.safeParse(input.contractId).success) return fail("Invalid contract.");
+  const status = z.enum(CONTRACT_STATUSES).safeParse(input.status);
+  if (!status.success) return fail("Unknown status.");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("contracts")
+    .update({ status: status.data })
+    .eq("id", input.contractId);
+
+  if (error) return fail(`Could not change the status: ${error.message}`);
 
   refresh();
   revalidatePath(`/contracts/${input.contractId}`);

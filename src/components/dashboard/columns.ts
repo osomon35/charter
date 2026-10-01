@@ -13,7 +13,14 @@ import { useCallback, useEffect, useState } from "react";
  * of the model — reordering them has no meaning, and a zero-width checkbox column
  * would be a trap.
  */
-export const COLUMN_KEYS = ["title", "counterparty", "status", "tags", "updated"] as const;
+export const COLUMN_KEYS = [
+  "title",
+  "counterparty",
+  "status",
+  "tags",
+  "folder",
+  "updated",
+] as const;
 export type ColumnKey = (typeof COLUMN_KEYS)[number];
 
 export const COLUMN_LABELS: Record<ColumnKey, string> = {
@@ -21,15 +28,23 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
   counterparty: "Counterparty",
   status: "Status",
   tags: "Tags",
+  folder: "Folder",
   updated: "Updated",
 };
 
+/**
+ * Relative, not absolute. The table is width:100% with table-layout:fixed, so
+ * these act as proportions — the browser scales them to the available space
+ * instead of overflowing, which is what keeps every column visible without a
+ * horizontal scrollbar.
+ */
 export const DEFAULT_WIDTHS: Record<ColumnKey, number> = {
-  title: 300,
-  counterparty: 200,
-  status: 150,
+  title: 280,
+  counterparty: 170,
+  status: 140,
   tags: 180,
-  updated: 110,
+  folder: 130,
+  updated: 100,
 };
 
 export const MIN_WIDTH = 72;

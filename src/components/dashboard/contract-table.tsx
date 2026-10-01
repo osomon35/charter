@@ -3,13 +3,8 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { Clock, GripVertical, PenLine, RotateCcw, X } from "lucide-react";
-import {
-  STATUS_CLASSES,
-  STATUS_LABELS,
-  TAG_COLOR_CLASSES,
-  formatBytes,
-} from "@/lib/contracts/types";
-import type { DashboardContract } from "@/lib/contracts/row-types";
+import { formatBytes } from "@/lib/contracts/types";
+import type { DashboardContract, FolderNode, TagRow } from "@/lib/contracts/row-types";
 import {
   COLUMN_LABELS,
   useColumnConfig,
@@ -19,6 +14,9 @@ import {
   COLUMN_DRAG_TYPE,
   startContractDrag,
 } from "@/components/dashboard/dnd";
+import { StatusCell } from "@/components/dashboard/status-cell";
+import { TagCell } from "@/components/dashboard/tag-cell";
+import { flattenTreeClient } from "@/components/dashboard/tree";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -35,21 +33,26 @@ export function ContractTable({
   onToggle,
   onToggleAll,
   dragPayload,
+  folders,
+  tags,
 }: {
   contracts: DashboardContract[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   dragPayload: (id: string) => string;
+  folders: FolderNode[];
+  tags: TagRow[];
 }) {
+  const folderNames = new Map(
+    flattenTreeClient(folders).map((folder) => [folder.id, folder.name]),
+  );
   const { config, move, resize, reset } = useColumnConfig();
   const [draggingColumn, setDraggingColumn] = useState<ColumnKey | null>(null);
   const [dropColumn, setDropColumn] = useState<ColumnKey | null>(null);
   const resizing = useRef<{ key: ColumnKey; startX: number; startWidth: number } | null>(null);
 
   const allSelected = contracts.length > 0 && selected.size === contracts.length;
-  const totalWidth =
-    config.order.reduce((sum, key) => sum + config.widths[key], 0) + 52 + 80;
 
   function startResize(event: React.PointerEvent, key: ColumnKey) {
     // stopPropagation, or the header's own drag starts and the resize never runs.
@@ -76,10 +79,13 @@ export function ContractTable({
 
   return (
     <div className="space-y-1.5">
+      {/* min-width, not a computed total: the table fills the container and the
+          browser scales the column widths to fit, so nothing needs scrolling to
+          be read. The minimum only kicks in on a phone. */}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table
-          className="border-collapse text-sm"
-          style={{ tableLayout: "fixed", width: Math.max(totalWidth, 640) }}
+          className="w-full border-collapse text-sm"
+          style={{ tableLayout: "fixed", minWidth: 620 }}
         >
           <colgroup>
             <col style={{ width: 52 }} />
@@ -175,7 +181,7 @@ export function ContractTable({
                   selected.has(contract.id) ? "bg-primary-subtle" : "hover:bg-surface-muted",
                 )}
               >
-                <td className="px-3 py-2.5 align-top">
+                <td className="px-3 py-3 align-middle">
                   <div className="flex items-center gap-1">
                     <GripVertical
                       className="size-3 shrink-0 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-60"
@@ -192,12 +198,19 @@ export function ContractTable({
                 </td>
 
                 {config.order.map((key) => (
-                  <td key={key} className="overflow-hidden px-2 py-2.5 align-top">
-                    <Cell contract={contract} column={key} />
+                  <td key={key} className="overflow-hidden px-2 py-3 align-middle">
+                    <Cell
+                      contract={contract}
+                      column={key}
+                      folderName={
+                        contract.folder_id ? folderNames.get(contract.folder_id) : undefined
+                      }
+                      tags={tags}
+                    />
                   </td>
                 ))}
 
-                <td className="px-2 py-2.5 align-top">
+                <td className="px-2 py-3 align-middle">
                   {contract.latest ? (
                     <Link
                       href={`/editor/${contract.id}`}
@@ -243,9 +256,13 @@ function acceptColumnDrag(event: React.DragEvent): boolean {
 function Cell({
   contract,
   column,
+  folderName,
+  tags,
 }: {
   contract: DashboardContract;
   column: ColumnKey;
+  folderName?: string;
+  tags: TagRow[];
 }) {
   switch (column) {
     case "title":
@@ -260,7 +277,7 @@ function Cell({
           </Link>
           <span className="block truncate text-xs text-muted-foreground">
             {contract.latest
-              ? `${contract.latest.page_count ?? "?"}p · ${formatBytes(contract.latest.byte_size)}`
+              ? `${contract.latest.page_count ?? "?"} pages · ${formatBytes(contract.latest.byte_size)}`
               : "No file"}
           </span>
         </>
@@ -276,22 +293,21 @@ function Cell({
     case "status":
       return (
         <div className="flex flex-col items-start gap-1">
-          <Badge className={STATUS_CLASSES[contract.status]}>
-            {STATUS_LABELS[contract.status]}
-          </Badge>
+          <StatusCell contractId={contract.id} status={contract.status} />
           <SigningFlag contract={contract} />
         </div>
       );
 
     case "tags":
       return (
-        <div className="flex flex-wrap gap-1">
-          {contract.tags.map((tag) => (
-            <Badge key={tag.id} className={TAG_COLOR_CLASSES[tag.color]}>
-              {tag.name}
-            </Badge>
-          ))}
-        </div>
+        <TagCell contractId={contract.id} allTags={tags} assigned={contract.tags} />
+      );
+
+    case "folder":
+      return (
+        <span className="block truncate text-xs text-muted-foreground">
+          {folderName ?? "—"}
+        </span>
       );
 
     case "updated":

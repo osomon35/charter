@@ -13,7 +13,6 @@ import { Toolbar } from "@/components/dashboard/toolbar";
 import { FolderTree } from "@/components/dashboard/folder-tree";
 import { ContractList } from "@/components/dashboard/contract-list";
 import { Pagination } from "@/components/dashboard/pagination";
-import { TagManager } from "@/components/dashboard/tag-manager";
 
 export const metadata: Metadata = { title: "Contracts" };
 
@@ -65,9 +64,9 @@ export default async function ContractsPage({
         </aside>
 
         <div className="min-w-0 flex-1 space-y-5">
-          {filters.view === "live" ? <Uploader /> : null}
+          <Toolbar filters={filters} />
 
-          <Toolbar filters={filters} folders={folders} tags={tags} />
+          {filters.view === "live" ? <Uploader compact /> : null}
 
           {page.rows.length === 0 ? (
             <EmptyState
@@ -104,16 +103,6 @@ export default async function ContractsPage({
             </>
           )}
 
-          {filters.view === "live" ? (
-            <details className="rounded-lg border border-border bg-surface">
-              <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
-                Manage tags
-              </summary>
-              <div className="border-t border-border p-4">
-                <TagManager tags={tags} />
-              </div>
-            </details>
-          ) : null}
         </div>
       </div>
     </div>

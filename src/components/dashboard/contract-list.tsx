@@ -125,6 +125,8 @@ export function ContractList({
             setSelected(allSelected ? new Set() : new Set(contracts.map((c) => c.id)))
           }
           dragPayload={dragPayload}
+          folders={folders}
+          tags={tags}
         />
       )}
     </div>

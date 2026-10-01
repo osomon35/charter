@@ -1,8 +1,18 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Folder, FolderOpen, Inbox, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  GripVertical,
+  Inbox,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import {
   bulkMove,
   createFolder,
@@ -11,8 +21,7 @@ import {
   renameFolder,
 } from "@/lib/contracts/organise-actions";
 import type { FolderNode } from "@/lib/contracts/row-types";
-import type { Filters } from "@/lib/contracts/filters";
-import { useFilters } from "@/components/dashboard/use-filters";
+import { toSearchParams, type Filters } from "@/lib/contracts/filters";
 import { Input } from "@/components/ui/input";
 import {
   acceptDrag,
@@ -39,7 +48,6 @@ export function FolderTree({
   counts: { live: number; archived: number; trash: number };
 }) {
   const router = useRouter();
-  const { update } = useFilters(filters);
   const [pending, startTransition] = useTransition();
   const [creatingUnder, setCreatingUnder] = useState<string | null | undefined>(undefined);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -98,8 +106,6 @@ export function FolderTree({
     return (
       <li key={node.id}>
         <div
-          draggable
-          onDragStart={(event) => startFolderDrag(event, node.id)}
           {...dropZoneProps(node.id, node.id)}
           style={{ paddingLeft: `${node.depth * 12 + 6}px` }}
           className={cn(
@@ -128,9 +134,17 @@ export function FolderTree({
             />
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => update({ folderId: selected ? null : node.id })}
+              {/* A real link, not a click handler: navigation then cannot be
+                  swallowed by a competing drag, and the row is reachable by
+                  keyboard and openable in a new tab. */}
+              <Link
+                href={`/contracts${toSearchParams({
+                  ...filters,
+                  folderId: selected ? null : node.id,
+                  page: 1,
+                })}`}
+                scroll={false}
+                draggable={false}
                 className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
               >
                 {isOpen ? (
@@ -139,7 +153,18 @@ export function FolderTree({
                   <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 )}
                 <span className="truncate">{node.name}</span>
-              </button>
+              </Link>
+
+              {/* Dragging a folder happens from its own grip, so it cannot
+                  interfere with following the link. */}
+              <span
+                draggable
+                onDragStart={(event) => startFolderDrag(event, node.id)}
+                title="Drag to re-nest"
+                className="hidden shrink-0 cursor-grab p-0.5 text-muted-foreground group-hover:block"
+              >
+                <GripVertical className="size-3" aria-hidden />
+              </span>
 
               <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
                 <IconButton label="New subfolder" onClick={() => setCreatingUnder(node.id)}>
@@ -189,10 +214,15 @@ export function FolderTree({
             { view: "trash" as const, label: "Trash", count: counts.trash },
           ]
         ).map((entry) => (
-          <button
+          <Link
             key={entry.view}
-            type="button"
-            onClick={() => update({ view: entry.view, folderId: null })}
+            href={`/contracts${toSearchParams({
+              view: entry.view,
+              layout: filters.layout,
+              sort: filters.sort,
+            })}`}
+            scroll={false}
+            draggable={false}
             className={cn(
               "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
               filters.view === entry.view
@@ -203,7 +233,7 @@ export function FolderTree({
             <Inbox className="size-3.5 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1 truncate text-left">{entry.label}</span>
             <span className="tabular-nums text-xs text-muted-foreground">{entry.count}</span>
-          </button>
+          </Link>
         ))}
       </nav>
 
