@@ -7,7 +7,6 @@ import { Archive, ArchiveRestore, Clock, FileText, Trash2, Undo2, X } from "luci
 import {
   bulkArchive,
   bulkDelete,
-  bulkMove,
   bulkRestore,
   bulkTag,
 } from "@/lib/contracts/organise-actions";
@@ -16,14 +15,8 @@ import {
   STATUS_LABELS,
   TAG_COLOR_CLASSES,
 } from "@/lib/contracts/types";
-import type {
-  DashboardContract,
-  FolderNode,
-  TagRow,
-} from "@/lib/contracts/row-types";
+import type { DashboardContract, TagRow } from "@/lib/contracts/row-types";
 import type { Filters } from "@/lib/contracts/filters";
-import { flattenTreeClient } from "@/components/dashboard/tree";
-import { startContractDrag } from "@/components/dashboard/dnd";
 import { ContractTable } from "@/components/dashboard/contract-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,12 +35,10 @@ import { cn } from "@/lib/utils";
 export function ContractList({
   contracts,
   filters,
-  folders,
   tags,
 }: {
   contracts: DashboardContract[];
   filters: Filters;
-  folders: FolderNode[];
   tags: TagRow[];
 }) {
   const router = useRouter();
@@ -76,12 +67,6 @@ export function ContractList({
     });
   }
 
-  function dragPayload(id: string): string {
-    // Dragging an unselected row acts on that row alone, which is what the
-    // gesture looks like it should do.
-    return selected.has(id) ? [...selected].join(",") : id;
-  }
-
   return (
     <div className="space-y-3">
       {error ? <Alert tone="error">{error}</Alert> : null}
@@ -90,11 +75,9 @@ export function ContractList({
         <BulkBar
           count={selected.size}
           inTrash={inTrash}
-          folders={folders}
           tags={tags}
           pending={pending}
           onClear={() => setSelected(new Set())}
-          onMove={(folderId) => run(() => bulkMove({ contractIds: [...selected], folderId }))}
           onTag={(tagId, add) => run(() => bulkTag({ contractIds: [...selected], tagId, add }))}
           onArchive={(archived) =>
             run(() => bulkArchive({ contractIds: [...selected], archived }))
@@ -112,7 +95,6 @@ export function ContractList({
               contract={contract}
               selected={selected.has(contract.id)}
               onToggle={() => toggle(contract.id)}
-              dragPayload={dragPayload(contract.id)}
             />
           ))}
         </div>
@@ -124,8 +106,6 @@ export function ContractList({
           onToggleAll={() =>
             setSelected(allSelected ? new Set() : new Set(contracts.map((c) => c.id)))
           }
-          dragPayload={dragPayload}
-          folders={folders}
           tags={tags}
         />
       )}
@@ -160,30 +140,23 @@ function CardRow({
   contract,
   selected,
   onToggle,
-  dragPayload,
 }: {
   contract: DashboardContract;
   selected: boolean;
   onToggle: () => void;
-  dragPayload: string;
 }) {
   const { latest } = contract;
 
   return (
     <div
-      draggable
-      onDragStart={(event) => startContractDrag(event, dragPayload)}
       className={cn(
-        "group relative cursor-grab rounded-lg border bg-surface transition-colors",
+        "group relative rounded-lg border bg-surface transition-colors",
         selected ? "border-primary ring-1 ring-primary" : "border-border hover:border-border-strong",
       )}
     >
-      {/* draggable={false} matters: an anchor is natively draggable and would
-          start its own drag carrying the URL, so the card's drag never fired. */}
       <Link
         href={`/contracts/${contract.id}`}
         aria-label={contract.title}
-        draggable={false}
         className="absolute inset-0 z-10 rounded-lg"
       />
 
@@ -242,11 +215,9 @@ function CardRow({
 function BulkBar({
   count,
   inTrash,
-  folders,
   tags,
   pending,
   onClear,
-  onMove,
   onTag,
   onArchive,
   onDelete,
@@ -254,18 +225,14 @@ function BulkBar({
 }: {
   count: number;
   inTrash: boolean;
-  folders: FolderNode[];
   tags: TagRow[];
   pending: boolean;
   onClear: () => void;
-  onMove: (folderId: string | null) => void;
   onTag: (tagId: string, add: boolean) => void;
   onArchive: (archived: boolean) => void;
   onDelete: () => void;
   onRestore: () => void;
 }) {
-  const flat = flattenTreeClient(folders);
-
   return (
     <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2.5 shadow-sm">
       <span className="px-1 text-sm font-medium tabular-nums">{count} selected</span>
@@ -277,28 +244,6 @@ function BulkBar({
         </Button>
       ) : (
         <>
-          <Select
-            aria-label="Move to folder"
-            defaultValue=""
-            disabled={pending}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (value === "") return;
-              onMove(value === "__none__" ? null : value);
-              event.target.value = "";
-            }}
-            className="w-auto min-w-40"
-          >
-            <option value="">Move to…</option>
-            <option value="__none__">No folder</option>
-            {flat.map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {"— ".repeat(folder.depth)}
-                {folder.name}
-              </option>
-            ))}
-          </Select>
-
           {tags.length > 0 ? (
             <Select
               aria-label="Apply tag"

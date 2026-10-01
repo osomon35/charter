@@ -28,7 +28,7 @@ export async function listContracts(): Promise<ContractWithLatest[]> {
   const { data, error } = await supabase
     .from("contracts")
     .select(
-      `id, title, counterparty_name, status, folder_id, notes,
+      `id, title, counterparty_name, status, notes,
        effective_date, expiry_date, created_at, updated_at,
        contract_versions (
          id, version_no, kind, state, page_count, byte_size,
@@ -66,7 +66,7 @@ export async function getContract(id: string): Promise<ContractWithLatest | null
   const { data, error } = await supabase
     .from("contracts")
     .select(
-      `id, title, counterparty_name, status, folder_id, notes,
+      `id, title, counterparty_name, status, notes,
        effective_date, expiry_date, created_at, updated_at,
        contract_versions (
          id, version_no, kind, state, page_count, byte_size,

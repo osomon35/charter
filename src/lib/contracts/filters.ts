@@ -32,7 +32,6 @@ export type Filters = {
   sort: Sort;
   query: string;
   statuses: ContractStatus[];
-  folderId: string | null;
   tagIds: string[];
   from: string | null;
   to: string | null;
@@ -74,7 +73,6 @@ export function parseFilters(
     statuses: list(params.status).filter((value): value is ContractStatus =>
       (CONTRACT_STATUSES as readonly string[]).includes(value),
     ),
-    folderId: single("folder") ?? null,
     tagIds: list(params.tag),
     from: from && ISO_DATE.test(from) ? from : null,
     to: to && ISO_DATE.test(to) ? to : null,
@@ -92,7 +90,6 @@ export function toSearchParams(filters: Partial<Filters>): string {
   if (filters.sort && filters.sort !== "recent") params.set("sort", filters.sort);
   if (filters.query) params.set("q", filters.query);
   if (filters.statuses?.length) params.set("status", filters.statuses.join(","));
-  if (filters.folderId) params.set("folder", filters.folderId);
   if (filters.tagIds?.length) params.set("tag", filters.tagIds.join(","));
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
@@ -108,7 +105,6 @@ export function hasActiveFilters(filters: Filters): boolean {
   return Boolean(
     filters.query ||
       filters.statuses.length ||
-      filters.folderId ||
       filters.tagIds.length ||
       filters.from ||
       filters.to ||

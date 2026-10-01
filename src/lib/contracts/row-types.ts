@@ -29,7 +29,6 @@ export type ContractRow = {
   title: string;
   counterparty_name: string | null;
   status: ContractStatus;
-  folder_id: string | null;
   notes: string | null;
   effective_date: string | null;
   expiry_date: string | null;
@@ -53,14 +52,6 @@ export type ContractWithLatest = ContractRow & {
   signing: SigningProgress | null;
 };
 
-export type FolderRow = {
-  id: string;
-  parent_id: string | null;
-  name: string;
-};
-
-export type FolderNode = FolderRow & { children: FolderNode[]; depth: number };
-
 export type TagRow = {
   id: string;
   name: string;
@@ -72,7 +63,6 @@ export type DashboardContract = {
   title: string;
   counterparty_name: string | null;
   status: ContractStatus;
-  folder_id: string | null;
   effective_date: string | null;
   expiry_date: string | null;
   updated_at: string;

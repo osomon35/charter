@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CONTRACT_STATUSES, TAG_COLORS } from "@/lib/contracts/types";
 
 /**
- * Folders, tags, and bulk operations.
+ * Tags and bulk operations.
  *
  * Every mutation calls requireOwner() first and then relies on RLS for the rows
  * themselves — an id belonging to someone else simply matches nothing. Ids are
@@ -39,97 +39,6 @@ function fail(error: string): { ok: false; error: string } {
 function refresh() {
   revalidatePath("/contracts");
   revalidatePath("/dashboard");
-}
-
-// ---------------------------------------------------------------------------
-// Folders
-// ---------------------------------------------------------------------------
-
-const folderNameSchema = z.string().trim().min(1).max(120);
-
-export async function createFolder(input: {
-  name: string;
-  parentId: string | null;
-}): Promise<ActionResult> {
-  await requireOwner();
-
-  const name = folderNameSchema.safeParse(input.name);
-  if (!name.success) return fail("Give the folder a name.");
-  if (input.parentId && !uuid.safeParse(input.parentId).success) {
-    return fail("Invalid parent folder.");
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("folders")
-    .insert({ name: name.data, parent_id: input.parentId });
-
-  if (error) return fail(`Could not create the folder: ${error.message}`);
-  refresh();
-  return ok();
-}
-
-export async function renameFolder(input: {
-  id: string;
-  name: string;
-}): Promise<ActionResult> {
-  await requireOwner();
-
-  if (!uuid.safeParse(input.id).success) return fail("Invalid folder.");
-  const name = folderNameSchema.safeParse(input.name);
-  if (!name.success) return fail("Give the folder a name.");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("folders")
-    .update({ name: name.data })
-    .eq("id", input.id);
-
-  if (error) return fail(`Could not rename the folder: ${error.message}`);
-  refresh();
-  return ok();
-}
-
-export async function moveFolder(input: {
-  id: string;
-  parentId: string | null;
-}): Promise<ActionResult> {
-  await requireOwner();
-
-  if (!uuid.safeParse(input.id).success) return fail("Invalid folder.");
-  if (input.parentId && !uuid.safeParse(input.parentId).success) {
-    return fail("Invalid destination.");
-  }
-  if (input.parentId === input.id) return fail("A folder cannot contain itself.");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("folders")
-    .update({ parent_id: input.parentId })
-    .eq("id", input.id);
-
-  // The cycle guard is a database trigger, so its message is the authoritative
-  // one — a deep move that would create a loop is refused there, not here.
-  if (error) return fail(error.message.replace(/^charter: /, ""));
-  refresh();
-  return ok();
-}
-
-/**
- * Deletes a folder. Its subfolders go with it (ON DELETE CASCADE), but the
- * contracts inside do not — their folder_id is set to null, so deleting a folder
- * never destroys an agreement.
- */
-export async function deleteFolder(id: string): Promise<ActionResult> {
-  await requireOwner();
-  if (!uuid.safeParse(id).success) return fail("Invalid folder.");
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("folders").delete().eq("id", id);
-
-  if (error) return fail(`Could not delete the folder: ${error.message}`);
-  refresh();
-  return ok();
 }
 
 // ---------------------------------------------------------------------------
@@ -239,29 +148,6 @@ export async function setContractStatus(input: {
 // ---------------------------------------------------------------------------
 // Bulk operations
 // ---------------------------------------------------------------------------
-
-export async function bulkMove(input: {
-  contractIds: string[];
-  folderId: string | null;
-}): Promise<ActionResult> {
-  await requireOwner();
-
-  const ids = uuidList.safeParse(input.contractIds);
-  if (!ids.success) return fail("Nothing selected.");
-  if (input.folderId && !uuid.safeParse(input.folderId).success) {
-    return fail("Invalid destination.");
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("contracts")
-    .update({ folder_id: input.folderId })
-    .in("id", ids.data);
-
-  if (error) return fail(`Could not move: ${error.message}`);
-  refresh();
-  return ok();
-}
 
 export async function bulkTag(input: {
   contractIds: string[];

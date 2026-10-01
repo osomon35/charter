@@ -5,24 +5,16 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   ContractPage,
   DashboardContract,
-  FolderNode,
-  FolderRow,
   TagRow,
   VersionRow,
 } from "@/lib/contracts/row-types";
 
-export type {
-  ContractPage,
-  DashboardContract,
-  FolderNode,
-  FolderRow,
-  TagRow,
-} from "@/lib/contracts/row-types";
+export type { ContractPage, DashboardContract, TagRow } from "@/lib/contracts/row-types";
 import { PAGE_SIZE, type Filters } from "@/lib/contracts/filters";
 import { embedOne } from "@/lib/supabase/embed";
 
 const SELECT = `
-  id, title, counterparty_name, status, folder_id, effective_date, expiry_date,
+  id, title, counterparty_name, status, effective_date, expiry_date,
   created_at, updated_at, archived_at, deleted_at,
   contract_versions (
     id, version_no, kind, state, page_count, byte_size,
@@ -84,7 +76,6 @@ export async function queryContracts(filters: Filters): Promise<ContractPage> {
 
   if (tagMatchedIds) request = request.in("id", tagMatchedIds);
   if (filters.statuses.length > 0) request = request.in("status", filters.statuses);
-  if (filters.folderId) request = request.eq("folder_id", filters.folderId);
   if (filters.counterparty) {
     request = request.ilike("counterparty_name", `%${filters.counterparty}%`);
   }
@@ -177,17 +168,6 @@ function shape(raw: unknown): DashboardContract {
 // Sidebar data
 // ---------------------------------------------------------------------------
 
-/** Cached per request: the shell and the page both want these. */
-export const listFolders = cache(async (): Promise<FolderNode[]> => {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("folders")
-    .select("id, parent_id, name")
-    .order("name", { ascending: true });
-
-  return buildTree((data ?? []) as FolderRow[]);
-});
-
 export const listTags = cache(async (): Promise<TagRow[]> => {
   const supabase = await createClient();
   const { data } = await supabase
@@ -232,31 +212,3 @@ export const viewCounts = cache(
     };
   },
 );
-
-/** Flat rows to a nested tree, with depth for indentation. */
-function buildTree(rows: FolderRow[]): FolderNode[] {
-  const byId = new Map<string, FolderNode>();
-  for (const row of rows) byId.set(row.id, { ...row, children: [], depth: 0 });
-
-  const roots: FolderNode[] = [];
-  for (const node of byId.values()) {
-    const parent = node.parent_id ? byId.get(node.parent_id) : undefined;
-    if (parent) parent.children.push(node);
-    else roots.push(node);
-  }
-
-  const assignDepth = (nodes: FolderNode[], depth: number) => {
-    for (const node of nodes) {
-      node.depth = depth;
-      assignDepth(node.children, depth + 1);
-    }
-  };
-  assignDepth(roots, 0);
-
-  return roots;
-}
-
-/** Depth-first flatten, for rendering a tree as a list. */
-export function flattenTree(nodes: FolderNode[]): FolderNode[] {
-  return nodes.flatMap((node) => [node, ...flattenTree(node.children)]);
-}

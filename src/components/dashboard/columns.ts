@@ -18,7 +18,6 @@ export const COLUMN_KEYS = [
   "counterparty",
   "status",
   "tags",
-  "folder",
   "updated",
 ] as const;
 export type ColumnKey = (typeof COLUMN_KEYS)[number];
@@ -28,29 +27,32 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
   counterparty: "Counterparty",
   status: "Status",
   tags: "Tags",
-  folder: "Folder",
   updated: "Updated",
 };
 
 /**
- * Relative, not absolute. The table is width:100% with table-layout:fixed, so
- * these act as proportions — the browser scales them to the available space
- * instead of overflowing, which is what keeps every column visible without a
- * horizontal scrollbar.
+ * Proportions, not pixels.
+ *
+ * The list is a CSS grid whose columns are fr units, so these numbers become
+ * ratios and the row can never be wider than its container. A fixed-layout table
+ * could still overflow when its column widths exceeded the available space, which
+ * is exactly what it did.
  */
 export const DEFAULT_WIDTHS: Record<ColumnKey, number> = {
   title: 280,
   counterparty: 170,
   status: 140,
   tags: 180,
-  folder: 130,
-  updated: 100,
+  updated: 110,
 };
 
-export const MIN_WIDTH = 72;
-export const MAX_WIDTH = 900;
+export const MIN_WIDTH = 60;
+export const MAX_WIDTH = 600;
 
 const STORAGE_KEY = "charter-contract-columns";
+
+/** Drag type for column reordering. Its own type so nothing else is mistaken for it. */
+export const COLUMN_DRAG_TYPE = "application/x-charter-column";
 
 export type ColumnConfig = {
   order: ColumnKey[];
